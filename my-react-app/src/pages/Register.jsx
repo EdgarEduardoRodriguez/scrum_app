@@ -8,7 +8,7 @@ export default function Register() {
   const navigate = useNavigate();
  
   // Campos del formulario
-  const [name, setName] = useState("");
+  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -18,10 +18,18 @@ export default function Register() {
     e.preventDefault();
     setLoading(true);
     try {
+      // Separa el nombre completo en nombre(s) y apellido(s).
+      const parts = fullName.trim().split(/\s+/).filter(Boolean);
+      if (parts.length < 2) {
+        throw { detail: "Escribe nombre y apellido en el campo Nombres" };
+      }
+      const firstName = parts.shift();
+      const lastName = parts.join(" ");
+
       // Enviamos al backend los datos necesarios para crear la cuenta.
       const res = await apiFetch("/api/auth/register/", {
         method: "POST",
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify({ name: firstName, last_name: lastName, email, password }),
       });
       if (!res.ok) {
         // Si el backend devuelve error, intentamos leer su mensaje.
@@ -43,16 +51,16 @@ export default function Register() {
     <div className="min-h-screen flex items-center justify-center bg-background p-6">
       <div className="w-full max-w-md bg-card border border-border rounded-xl shadow-sm p-6">
         <h1 className="text-2xl font-bold text-foreground">Crear cuenta</h1>
-        <p className="text-sm text-muted-foreground mt-1">Regístrate con tu nombre, correo y contraseña.</p>
+        <p className="text-sm text-muted-foreground mt-1">Regístrate con tu nombre completo, correo y contraseña.</p>
  
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">Nombre</label>
+            <label className="text-sm font-medium text-foreground">Nombres</label>
             <input
               type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Tu nombre completo"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              placeholder="Ej: Edgar Rodriguez"
               className="w-full px-3 py-2 rounded-lg border border-input bg-background"
               required
             />

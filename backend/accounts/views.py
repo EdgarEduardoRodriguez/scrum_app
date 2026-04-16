@@ -46,6 +46,7 @@ def register(request):
     Espera:
     {
       "name": "...",
+      "last_name": "...",
       "email": "...",
       "password": "..."
     }

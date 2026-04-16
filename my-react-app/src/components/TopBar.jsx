@@ -8,6 +8,9 @@ function TopBar({ projectName = "Nombre del Proyecto", sprintNumber = 12 }) {
   const currentDate = new Date().toLocaleDateString("es-ES", { month: "long", year: "numeric" });
   const navigate = useNavigate();
   const { logout, user } = useAuth();
+
+  // Nombre completo desde backend (first_name + last_name).
+  const fullName = [user?.first_name, user?.last_name].filter(Boolean).join(" ") || user?.username || "Usuario";
  
   const handleLogout = async () => {
     // Cerramos sesión limpiando tokens y después mandamos al login.
@@ -15,10 +18,9 @@ function TopBar({ projectName = "Nombre del Proyecto", sprintNumber = 12 }) {
     navigate("/login");
   };
  
-  // Generamos iniciales para el avatar a partir del nombre del usuario.
+  // Generamos iniciales para el avatar a partir del nombre completo.
   const initials = (() => {
-    const name = user?.first_name || user?.username || "";
-    const parts = name.split(" ").filter(Boolean);
+    const parts = fullName.split(" ").filter(Boolean);
     if (parts.length === 0) return "U";
     if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
@@ -59,7 +61,7 @@ function TopBar({ projectName = "Nombre del Proyecto", sprintNumber = 12 }) {
  
         <div className="flex items-center gap-3 ml-2">
           <div className="text-right">
-            <p className="text-sm font-medium text-foreground">{user?.first_name || user?.username || 'Usuario'}</p>
+            <p className="text-sm font-medium text-foreground">{fullName}</p>
             <p className="text-xs text-muted-foreground">Scrum Master</p>
           </div>
           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-indigo-500 flex items-center justify-center text-primary-foreground font-medium shadow-md">
