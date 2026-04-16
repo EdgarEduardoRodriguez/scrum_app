@@ -2,6 +2,7 @@ from django.contrib.auth.models import User
 from rest_framework import serializers
 
 
+# Serializer para validar y crear usuarios desde el endpoint de registro.
 class RegisterSerializer(serializers.Serializer):
     """Serializer para registrar usuarios.
 
@@ -14,6 +15,7 @@ class RegisterSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True, min_length=4)
 
     def validate_email(self, value):
+        # Evitamos duplicados revisando tanto username como email.
         if User.objects.filter(username=value).exists() or User.objects.filter(email=value).exists():
             raise serializers.ValidationError("Ya existe un usuario con ese correo")
         return value
@@ -29,6 +31,7 @@ class RegisterSerializer(serializers.Serializer):
         return user
 
 
+# Serializer de lectura para devolver datos básicos del usuario autenticado.
 class MeSerializer(serializers.ModelSerializer):
     """Serializer para regresar datos básicos del usuario autenticado."""
 

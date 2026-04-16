@@ -9,6 +9,8 @@ import ComingSoon from './pages/ComingSoon';
 import Login from './pages/Login';
 import Register from './pages/Register';
 
+// App es el punto de entrada de las rutas en todo el frontend.
+// Aquí definimos qué pantallas son públicas y cuáles requieren sesión.
 function App() {
   return (
     <Router>
@@ -24,15 +26,18 @@ function App() {
         <Route
           path="/"
           element={
+            // Envolvemos Layout para que sólo usuarios autenticados entren.
             <ProtectedRoute>
               <Layout />
             </ProtectedRoute>
           }
         >
+          {/* index = ruta raíz / */}
           <Route index element={<Dashboard />} />
           <Route path="kanban" element={<KanbanPage />} />
           <Route path="tareas" element={<KanbanPage />} />
 
+          {/* Estas rutas están en estado "próximamente" */}
           <Route path="sprints" element={<ComingSoon title="Gestión de Sprints" />} />
           <Route path="equipo" element={<ComingSoon title="Gestión de Equipo" />} />
           <Route path="reportes" element={<ComingSoon title="Reportes y Métricas" />} />

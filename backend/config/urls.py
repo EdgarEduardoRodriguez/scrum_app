@@ -17,7 +17,11 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import include, path
 
+# Rutas principales del proyecto Django.
+# Desde aquí delegamos rutas específicas a cada app.
 urlpatterns = [
+    # Panel administrativo de Django.
     path('admin/', admin.site.urls),
+    # Todas las rutas de autenticación quedan bajo /api/auth/
     path('api/auth/', include('accounts.urls')),
 ]

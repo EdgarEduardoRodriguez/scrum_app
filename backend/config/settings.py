@@ -31,6 +31,7 @@ SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "django-insecure-change-me")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv("DJANGO_DEBUG", "false").lower() == "true"
 
+# Hosts permitidos en desarrollo local.
 ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
 
 
@@ -44,12 +45,12 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
 
-    # Third-party
+    # Paquetes de terceros
     'rest_framework',
     'corsheaders',
     'rest_framework_simplejwt.token_blacklist',
 
-    # Local apps
+    # Apps locales del proyecto
     'accounts',
 ]
 
@@ -96,7 +97,7 @@ DATABASES = {
         'PASSWORD': os.getenv('DB_PASSWORD', ''),
         'HOST': os.getenv('DB_HOST', '127.0.0.1'),
         'PORT': os.getenv('DB_PORT', '3306'),
-        # Usando PyMySQL (instalado) como driver.
+        # Charset recomendado para soportar bien caracteres y emojis.
         'OPTIONS': {
             'charset': 'utf8mb4',
         },
@@ -114,9 +115,11 @@ En Windows instalamos `mysqlclient` dentro del venv.
 # DRF + JWT
 # ------------------------------
 REST_FRAMEWORK = {
+    # JWT se encarga de resolver request.user en endpoints protegidos.
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
+    # Por defecto todo requiere autenticación (salvo vistas con AllowAny).
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
@@ -126,6 +129,7 @@ REST_FRAMEWORK = {
 from datetime import timedelta  # noqa: E402
 
 SIMPLE_JWT = {
+    # Duración de token de acceso y token de refresco.
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
 }

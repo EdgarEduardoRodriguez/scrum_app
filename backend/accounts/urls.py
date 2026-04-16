@@ -4,6 +4,9 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from . import views
 
 
+# Rutas específicas del módulo de autenticación/cuenta.
+# Estas rutas se montan bajo /api/auth/ desde config/urls.py.
+
 urlpatterns = [
     # Salud del backend
     path("health/", views.health, name="health"),

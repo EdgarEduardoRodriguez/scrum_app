@@ -1,14 +1,18 @@
+// Hooks básicos para estado local y efectos de ciclo de vida.
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
  
 export default function Login() {
+  // Hook para redireccionar al usuario.
   const navigate = useNavigate();
+  // Nos permite saber desde qué ruta intentó entrar (útil para redirección post-login).
   const location = useLocation();
+  // Estado global de autenticación (proveído por AuthContext).
   const { isAuthenticated, login } = useAuth();
  
   // Campos del formulario
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState("");  
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
  
@@ -20,16 +24,21 @@ export default function Login() {
   }, [isAuthenticated, navigate]);
  
   const handleSubmit = async (e) => {
+    // Evita que el navegador recargue la página al enviar el formulario.
     e.preventDefault();
     setLoading(true);
     try {
+      // Delegamos el login al contexto para centralizar manejo de tokens/sesión.
       await login({ email, password });
+      // Si ProtectedRoute guardó una ruta previa, volvemos ahí; si no, al home.
       const redirectTo = location.state?.from?.pathname || "/";
       navigate(redirectTo, { replace: true });
     } catch (err) {
+      // Preferimos mostrar el mensaje real del backend cuando venga disponible.
       const msg = err?.detail || (err?.non_field_errors && err.non_field_errors.join(", ")) || "Error al iniciar sesión";
       alert(msg);
     } finally {
+      // Pase lo que pase, quitamos el estado de carga.
       setLoading(false);
     }
   };

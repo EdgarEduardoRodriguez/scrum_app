@@ -1,3 +1,5 @@
+# Estas vistas conectan el frontend con la lógica de autenticación del backend.
+# Validan datos con serializers y responden JSON para React.
 from datetime import datetime
 import logging
 
@@ -17,9 +19,11 @@ class LoggingTokenObtainPairView(TokenObtainPairView):
 
     def post(self, request, *args, **kwargs):
         try:
+            # Registramos el payload recibido para facilitar depuración en login.
             logger.info("Login payload: %s", request.data)
         except Exception:
             logger.exception("Failed to log login payload")
+        # Ejecutamos la lógica JWT original (genera access + refresh si credenciales válidas).
         response = super().post(request, *args, **kwargs)
         if response.status_code == 401:
             logger.warning("Login failed for payload: %s", request.data)
@@ -47,11 +51,13 @@ def register(request):
     }
     """
 
+    # Validamos y creamos usuario a través del serializer de registro.
     serializer = RegisterSerializer(data=request.data)
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     user = serializer.save()
+    # Devolvemos información básica del usuario recién creado.
     return Response(MeSerializer(user).data, status=status.HTTP_201_CREATED)
 
 
@@ -66,7 +72,7 @@ def logout(request):
     Si quieres blacklist de refresh tokens, se puede agregar después.
     """
 
-    # Si el frontend manda el refresh token, podemos invalidarlo (blacklist).
+    # Si el frontend manda refresh, intentamos invalidarlo usando blacklist.
     refresh = request.data.get("refresh")
     if refresh:
         try:
@@ -83,6 +89,7 @@ def logout(request):
 def me(request):
     """Regresa info del usuario autenticado."""
 
+    # request.user viene resuelto por JWTAuthentication (DRF).
     return Response(MeSerializer(request.user).data)
 
 # Create your views here.

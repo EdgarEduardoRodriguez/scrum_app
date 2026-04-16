@@ -1,7 +1,8 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import apiFetch from "../utils/api";
  
-// AuthContext (sesion) usando JWT con backend
+// Contexto global de autenticación usando JWT.
+// Aquí centralizamos login, logout, refresh y estado del usuario.
 const AuthContext = createContext(null);
 
 const ACCESS_KEY = "scrum_access";
@@ -11,7 +12,7 @@ const USER_KEY = "scrum_user";
 export function AuthProvider({ children }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState(null);
-  const api = import.meta.env.VITE_API_URL || "";
+  // Ref para guardar el timer de refresh sin provocar re-renders.
   const refreshTimer = useRef(null);
 
   // util: parse JWT para obtener exp
@@ -95,7 +96,7 @@ export function AuthProvider({ children }) {
     const data = await res.json();
     localStorage.setItem(ACCESS_KEY, data.access);
     localStorage.setItem(REFRESH_KEY, data.refresh);
-    // obtener usuario
+    // Con access token vigente pedimos perfil del usuario autenticado.
     const meRes = await apiFetch("/api/auth/me/", { method: "GET" });
     const me = await meRes.json();
     localStorage.setItem(USER_KEY, JSON.stringify(me));
@@ -127,6 +128,7 @@ export function AuthProvider({ children }) {
   };
 
   const value = useMemo(
+    // Exponemos estado y funciones del contexto a toda la app.
     () => ({ isAuthenticated, user, login, logout, refreshAccess }),
     [isAuthenticated, user]
   );

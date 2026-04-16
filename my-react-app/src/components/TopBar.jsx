@@ -2,16 +2,20 @@ import { Bell, Search, LogOut } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
  
+// TopBar muestra contexto del proyecto y acciones rápidas de sesión/UI.
 function TopBar({ projectName = "Nombre del Proyecto", sprintNumber = 12 }) {
+  // Fecha actual para mostrarla como referencia del sprint en curso.
   const currentDate = new Date().toLocaleDateString("es-ES", { month: "long", year: "numeric" });
   const navigate = useNavigate();
   const { logout, user } = useAuth();
  
   const handleLogout = async () => {
+    // Cerramos sesión limpiando tokens y después mandamos al login.
     await logout();
     navigate("/login");
   };
  
+  // Generamos iniciales para el avatar a partir del nombre del usuario.
   const initials = (() => {
     const name = user?.first_name || user?.username || "";
     const parts = name.split(" ").filter(Boolean);
@@ -29,6 +33,7 @@ function TopBar({ projectName = "Nombre del Proyecto", sprintNumber = 12 }) {
  
       <div className="flex items-center gap-4">
         <div className="relative">
+          {/* Input de búsqueda (solo UI por ahora) */}
           <Search className="w-5 h-5 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
@@ -38,6 +43,7 @@ function TopBar({ projectName = "Nombre del Proyecto", sprintNumber = 12 }) {
         </div>
  
         <button className="relative p-2 hover:bg-muted rounded-lg transition-colors">
+          {/* Campana de notificaciones (placeholder visual) */}
           <Bell className="w-5 h-5 text-foreground" />
           <span className="absolute top-1 right-1 w-2 h-2 bg-destructive rounded-full"></span>
         </button>

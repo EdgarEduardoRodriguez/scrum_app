@@ -1,6 +1,8 @@
 import { LayoutDashboard, ListTodo, Users, Calendar, Settings, BarChart3 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 
+// Catálogo de opciones que pintamos en el menú lateral.
+// Así evitamos repetir JSX por cada item.
 const navItems = [
   { icon: LayoutDashboard, label: 'Tablero', path: '/' },
   { icon: ListTodo, label: 'Tareas', path: '/tareas' },
@@ -10,7 +12,9 @@ const navItems = [
   { icon: Settings, label: 'Configuración', path: '/configuracion' },
 ];
 
+// Sidebar fijo del lado izquierdo con navegación principal.
 export default function Sidebar() {
+  // Ruta actual para marcar visualmente la opción activa.
   const location = useLocation();
   
   return (
@@ -23,7 +27,9 @@ export default function Sidebar() {
       <nav className="flex-1 p-4">
         <ul className="space-y-2">
           {navItems.map((item) => {
+            // El ícono viene como componente dentro de cada item.
             const Icon = item.icon;
+            // Comparamos path actual vs path del item para cambiar estilos.
             const isActive = location.pathname === item.path;
             return (
               <li key={item.label}>

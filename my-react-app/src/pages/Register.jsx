@@ -2,7 +2,9 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import apiFetch from "../utils/api";
  
+// Pantalla de registro: crea usuarios nuevos en el backend.
 export default function Register() {
+  // Hook para redirigir al usuario entre pantallas.
   const navigate = useNavigate();
  
   // Campos del formulario
@@ -12,14 +14,17 @@ export default function Register() {
   const [loading, setLoading] = useState(false);
  
   const handleSubmit = async (e) => {
+    // Evita el submit tradicional del navegador.
     e.preventDefault();
     setLoading(true);
     try {
+      // Enviamos al backend los datos necesarios para crear la cuenta.
       const res = await apiFetch("/api/auth/register/", {
         method: "POST",
         body: JSON.stringify({ name, email, password }),
       });
       if (!res.ok) {
+        // Si el backend devuelve error, intentamos leer su mensaje.
         const err = await res.json().catch(() => ({ detail: "Error" }));
         throw err;
       }
@@ -29,6 +34,7 @@ export default function Register() {
       const msg = err?.detail || "Error al registrar";
       alert(msg);
     } finally {
+      // Siempre restauramos estado de carga al finalizar.
       setLoading(false);
     }
   };
