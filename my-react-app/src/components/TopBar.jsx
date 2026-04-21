@@ -1,6 +1,7 @@
-import { Bell, Search, LogOut } from "lucide-react";
+import { Bell, Search, LogOut, Plus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
+import { useState } from "react";
  
 // TopBar muestra contexto del proyecto y acciones rápidas de sesión/UI.
 function TopBar({ projectName = "Nombre del Proyecto", sprintNumber = 12 }) {
@@ -34,6 +35,14 @@ function TopBar({ projectName = "Nombre del Proyecto", sprintNumber = 12 }) {
       </div>
  
       <div className="flex items-center gap-4">
+        <button
+          className="bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors flex items-center gap-2"
+          title="Crear nuevo proyecto"
+        >
+          <Plus className="w-5 h-5" />
+          Nuevo Proyecto
+        </button>
+
         <div className="relative">
           {/* Input de búsqueda (solo UI por ahora) */}
           <Search className="w-5 h-5 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
