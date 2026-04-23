@@ -1,24 +1,21 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import apiFetch from "../utils/api";
- 
+import { registerUser } from "../context/UserContext";
+
 // Pantalla de registro: crea usuarios nuevos en el backend.
 export default function Register() {
-  // Hook para redirigir al usuario entre pantallas.
   const navigate = useNavigate();
- 
-  // Campos del formulario
+
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
- 
+
   const handleSubmit = async (e) => {
-    // Evita el submit tradicional del navegador.
     e.preventDefault();
     setLoading(true);
     try {
-      // Separa el nombre completo en nombre(s) y apellido(s).
       const parts = fullName.trim().split(/\s+/).filter(Boolean);
       if (parts.length < 2) {
         throw { detail: "Escribe nombre y apellido en el campo Nombres" };
@@ -26,33 +23,44 @@ export default function Register() {
       const firstName = parts.shift();
       const lastName = parts.join(" ");
 
-      // Enviamos al backend los datos necesarios para crear la cuenta.
       const res = await apiFetch("/api/auth/register/", {
         method: "POST",
         body: JSON.stringify({ name: firstName, last_name: lastName, email, password }),
       });
       if (!res.ok) {
-        // Si el backend devuelve error, intentamos leer su mensaje.
         const err = await res.json().catch(() => ({ detail: "Error" }));
         throw err;
       }
+
+      const newUser = await res.json();
+
+      // ── Guardar en el registro local para que otros puedan invitarlo ──
+      registerUser({
+        id: newUser.id,
+        first_name: firstName,
+        last_name: lastName,
+        email,
+        username: email,
+      });
+
       alert("Registro completado. Ahora inicia sesión.");
       navigate("/login");
     } catch (err) {
       const msg = err?.detail || "Error al registrar";
       alert(msg);
     } finally {
-      // Siempre restauramos estado de carga al finalizar.
       setLoading(false);
     }
   };
- 
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-6">
       <div className="w-full max-w-md bg-card border border-border rounded-xl shadow-sm p-6">
         <h1 className="text-2xl font-bold text-foreground">Crear cuenta</h1>
-        <p className="text-sm text-muted-foreground mt-1">Regístrate con tu nombre completo, correo y contraseña.</p>
- 
+        <p className="text-sm text-muted-foreground mt-1">
+          Regístrate con tu nombre completo, correo y contraseña.
+        </p>
+
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground">Nombres</label>
@@ -65,7 +73,7 @@ export default function Register() {
               required
             />
           </div>
- 
+
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground">Correo</label>
             <input
@@ -77,7 +85,7 @@ export default function Register() {
               required
             />
           </div>
- 
+
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground">Contraseña</label>
             <input
@@ -89,7 +97,7 @@ export default function Register() {
               required
             />
           </div>
- 
+
           <button
             type="submit"
             disabled={loading}
@@ -98,9 +106,11 @@ export default function Register() {
             {loading ? "Registrando..." : "Registrarme"}
           </button>
         </form>
- 
-        {/* Link para regresar al login */}
-        <button onClick={() => navigate("/login")} className="w-full mt-4 text-sm text-primary hover:underline">
+
+        <button
+          onClick={() => navigate("/login")}
+          className="w-full mt-4 text-sm text-primary hover:underline"
+        >
           Ya tengo cuenta, volver al login
         </button>
       </div>

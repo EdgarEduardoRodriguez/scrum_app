@@ -5,20 +5,18 @@ import App from './App.jsx'
 import { AuthProvider } from './auth/AuthContext.jsx'
 import { ProjectProvider } from './context/ProjectContext.jsx'
 import { NotificationProvider } from './context/NotificationContext.jsx'
+import { UserProvider } from './context/UserContext.jsx'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    {/*
-      AuthProvider: gestiona sesión JWT global.
-      ProjectProvider: gestiona el proyecto activo global.
-      NotificationProvider: gestiona notificaciones e invitaciones.
-    */}
     <AuthProvider>
-      <ProjectProvider>
-        <NotificationProvider>
-          <App />
-        </NotificationProvider>
-      </ProjectProvider>
+      <UserProvider>
+        <ProjectProvider>
+          <NotificationProvider>
+            <App />
+          </NotificationProvider>
+        </ProjectProvider>
+      </UserProvider>
     </AuthProvider>
   </StrictMode>,
 )

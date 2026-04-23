@@ -1,60 +1,55 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from "react";
-import apiFetch from "../utils/api";
 
 const NotificationContext = createContext(null);
 
-// ─── Mock local (se reemplaza cuando el backend esté listo) ────────────────
-const MOCK_NOTIFICATIONS = [
-  {
-    id: "1",
-    type: "project_invitation",
-    read: false,
-    created_at: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
-    payload: {
-      invitation_id: "inv-1",
-      project_id: "2",
-      project_name: "App Móvil de Pagos",
-      project_color: "#7C3AED",
-      invited_by_name: "María García",
-      role: "Developer",
-    },
-  },
-  {
-    id: "2",
-    type: "role_changed",
-    read: false,
-    created_at: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-    payload: {
-      project_name: "Sistema de Biblioteca Universitaria",
-      new_role: "Tester",
-    },
-  },
-  {
-    id: "3",
-    type: "invitation_accepted",
-    read: true,
-    created_at: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
-    payload: {
-      user_name: "Carlos Ruíz",
-      project_name: "Sistema de Biblioteca Universitaria",
-      role: "Tester",
-    },
-  },
-];
+// ─── Clave de invitaciones pendientes ─────────────────────────────────────
+function pendingKey(userId) {
+  return `scrum_pending_invitations_${userId}`;
+}
 
-// ─── Helpers ──────────────────────────────────────────────────────────────
-const USE_MOCK = true; // Cambia a false cuando el backend esté listo
+// ─── Lee invitaciones del localStorage y las convierte en notificaciones ──
+function loadNotificationsForUser(userId) {
+  try {
+    const raw = localStorage.getItem(pendingKey(userId));
+    const invitations = raw ? JSON.parse(raw) : [];
+    return invitations.map((inv) => ({
+      id: `notif-${inv.id}`,
+      type: "project_invitation",
+      read: inv.status !== "pending",
+      created_at: inv.invited_at,
+      _responded: inv.status !== "pending" ? inv.status : undefined,
+      payload: {
+        invitation_id: inv.id,
+        project_id: inv.project_id,
+        project_name: inv.project_name,
+        invited_by_name: inv.invited_by || "Un compañero",
+        role: inv.role,
+      },
+    }));
+  } catch {
+    return [];
+  }
+}
 
-async function fetchFromBackend() {
-  const res = await apiFetch("/api/notifications/");
-  if (!res.ok) throw new Error("Failed to fetch notifications");
-  return res.json();
+// Actualiza el estado de una invitación en localStorage
+function updateInvitationStatus(userId, invitationId, status) {
+  try {
+    const key = pendingKey(userId);
+    const raw = localStorage.getItem(key);
+    const invitations = raw ? JSON.parse(raw) : [];
+    const updated = invitations.map((inv) =>
+      inv.id === invitationId ? { ...inv, status } : inv
+    );
+    localStorage.setItem(key, JSON.stringify(updated));
+  } catch {
+    // silencioso
+  }
 }
 
 // ─── Provider ─────────────────────────────────────────────────────────────
 export function NotificationProvider({ children }) {
   const [notifications, setNotifications] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [userId, setUserId] = useState(null);
   const pollingRef = useRef(null);
 
   const unreadCount = useMemo(
@@ -62,90 +57,98 @@ export function NotificationProvider({ children }) {
     [notifications]
   );
 
-  // Carga inicial y polling cada 30s
-  const fetchNotifications = useCallback(async () => {
+  // Obtener userId del localStorage (guardado por AuthContext)
+  const resolveUserId = useCallback(() => {
     try {
-      if (USE_MOCK) {
-        setNotifications(MOCK_NOTIFICATIONS);
-      } else {
-        const data = await fetchFromBackend();
-        setNotifications(data);
-      }
+      const raw = localStorage.getItem("scrum_user");
+      const user = raw ? JSON.parse(raw) : null;
+      return user?.id ? String(user.id) : null;
     } catch {
-      // silencioso: no romper la app si falla
-    } finally {
-      setLoading(false);
+      return null;
     }
   }, []);
+
+  const fetchNotifications = useCallback(() => {
+    const uid = resolveUserId();
+    setUserId(uid);
+    if (!uid) { setNotifications([]); return; }
+    const notifs = loadNotificationsForUser(uid);
+    setNotifications(notifs);
+  }, [resolveUserId]);
 
   useEffect(() => {
     fetchNotifications();
-    pollingRef.current = setInterval(fetchNotifications, 30_000);
+    pollingRef.current = setInterval(fetchNotifications, 10_000); // cada 10s
     return () => clearInterval(pollingRef.current);
   }, [fetchNotifications]);
 
-  // Marca una notificación como leída
-  const markAsRead = useCallback(async (notificationId) => {
+  // Marcar como leída
+  const markAsRead = useCallback((notificationId) => {
     setNotifications((prev) =>
       prev.map((n) => (n.id === notificationId ? { ...n, read: true } : n))
     );
-    if (!USE_MOCK) {
-      try {
-        await apiFetch(`/api/notifications/${notificationId}/read/`, { method: "PATCH" });
-      } catch {
-        // revertir si falla
-        setNotifications((prev) =>
-          prev.map((n) => (n.id === notificationId ? { ...n, read: false } : n))
-        );
-      }
-    }
   }, []);
 
-  // Marca todas como leídas
+  // Marcar todas como leídas
   const markAllAsRead = useCallback(() => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
   }, []);
 
-  // Responde a una invitación (accept | reject)
+  // Aceptar o rechazar invitación
   const respondToInvitation = useCallback(
-    async (notificationId, invitationId, action) => {
-      // Optimistic: quitar la notificación accionable inmediatamente
+    (notificationId, invitationId, action) => {
+      const uid = resolveUserId();
+
+      // Actualizar en localStorage
+      if (uid) updateInvitationStatus(uid, invitationId, action);
+
+      // Actualizar estado local
       setNotifications((prev) =>
         prev.map((n) =>
-          n.id === notificationId ? { ...n, read: true, _responded: action } : n
+          n.id === notificationId
+            ? { ...n, read: true, _responded: action }
+            : n
         )
       );
 
-      if (!USE_MOCK) {
+      // Si aceptó: agregar el proyecto a su lista visible
+      if (action === "accept") {
         try {
-          await apiFetch(`/api/invitations/${invitationId}/respond/`, {
-            method: "PATCH",
-            body: JSON.stringify({ action }),
-          });
+          const raw = localStorage.getItem(pendingKey(uid));
+          const invitations = raw ? JSON.parse(raw) : [];
+          const inv = invitations.find((i) => i.id === invitationId);
+          if (inv) {
+            const JOINED_KEY = `scrum_joined_projects_${uid}`;
+            const joined = JSON.parse(localStorage.getItem(JOINED_KEY) || "[]");
+            const alreadyJoined = joined.find((p) => p.project_id === inv.project_id);
+            if (!alreadyJoined) {
+              joined.push({
+                project_id: inv.project_id,
+                project_name: inv.project_name,
+                role: inv.role,
+                joined_at: new Date().toISOString(),
+              });
+              localStorage.setItem(JOINED_KEY, JSON.stringify(joined));
+            }
+          }
         } catch {
-          // revertir
-          setNotifications((prev) =>
-            prev.map((n) =>
-              n.id === notificationId ? { ...n, read: false, _responded: undefined } : n
-            )
-          );
+          // silencioso
         }
       }
     },
-    []
+    [resolveUserId]
   );
 
   const value = useMemo(
     () => ({
       notifications,
       unreadCount,
-      loading,
       fetchNotifications,
       markAsRead,
       markAllAsRead,
       respondToInvitation,
     }),
-    [notifications, unreadCount, loading, fetchNotifications, markAsRead, markAllAsRead, respondToInvitation]
+    [notifications, unreadCount, fetchNotifications, markAsRead, markAllAsRead, respondToInvitation]
   );
 
   return (
