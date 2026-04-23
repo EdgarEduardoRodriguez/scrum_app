@@ -1,13 +1,19 @@
+import { useState, useRef, useEffect } from "react";
 import { Bell, Search, LogOut, FolderOpen, ChevronDown } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { useProject } from "../context/ProjectContext";
+import { useNotifications } from "../context/NotificationContext";
+import NotificationsPanel from "./NotificationsPanel";
 
 function TopBar() {
   const currentDate = new Date().toLocaleDateString("es-ES", { month: "long", year: "numeric" });
   const navigate = useNavigate();
   const { logout, user } = useAuth();
   const { activeProject, clearProject } = useProject();
+  const { unreadCount } = useNotifications();
+  const [notifOpen, setNotifOpen] = useState(false);
+  const bellRef = useRef(null);
 
   const fullName =
     [user?.first_name, user?.last_name].filter(Boolean).join(" ") ||
@@ -27,7 +33,6 @@ function TopBar() {
     navigate("/login");
   };
 
-  // Volver a la selección de proyectos sin cerrar sesión
   const handleSwitchProject = () => {
     clearProject();
     navigate("/proyectos");
@@ -64,11 +69,27 @@ function TopBar() {
           />
         </div>
 
-        {/* Notificaciones */}
-        <button className="relative p-2 hover:bg-muted rounded-lg transition-colors">
-          <Bell className="w-5 h-5 text-foreground" />
-          <span className="absolute top-1 right-1 w-2 h-2 bg-destructive rounded-full" />
-        </button>
+        {/* Campana de notificaciones */}
+        <div className="relative" ref={bellRef}>
+          <button
+            onClick={() => setNotifOpen((o) => !o)}
+            className="relative p-2 hover:bg-muted rounded-lg transition-colors"
+            aria-label="Notificaciones"
+          >
+            <Bell className="w-5 h-5 text-foreground" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-blue-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center leading-none">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
+          </button>
+
+          {/* Panel de notificaciones */}
+          <NotificationsPanel
+            isOpen={notifOpen}
+            onClose={() => setNotifOpen(false)}
+          />
+        </div>
 
         {/* Cambiar proyecto */}
         <button
