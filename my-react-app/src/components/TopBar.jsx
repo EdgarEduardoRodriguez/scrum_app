@@ -1,79 +1,103 @@
-import { Bell, Search, LogOut, Plus } from "lucide-react";
+import { Bell, Search, LogOut, FolderOpen, ChevronDown } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import { useState } from "react";
- 
-// TopBar muestra contexto del proyecto y acciones rápidas de sesión/UI.
-function TopBar({ projectName = "Nombre del Proyecto", sprintNumber = 12 }) {
-  // Fecha actual para mostrarla como referencia del sprint en curso.
+import { useProject } from "../context/ProjectContext";
+
+function TopBar() {
   const currentDate = new Date().toLocaleDateString("es-ES", { month: "long", year: "numeric" });
   const navigate = useNavigate();
   const { logout, user } = useAuth();
+  const { activeProject, clearProject } = useProject();
 
-  // Nombre completo desde backend (first_name + last_name).
-  const fullName = [user?.first_name, user?.last_name].filter(Boolean).join(" ") || user?.username || "Usuario";
- 
-  const handleLogout = async () => {
-    // Cerramos sesión limpiando tokens y después mandamos al login.
-    await logout();
-    navigate("/login");
-  };
- 
-  // Generamos iniciales para el avatar a partir del nombre completo.
+  const fullName =
+    [user?.first_name, user?.last_name].filter(Boolean).join(" ") ||
+    user?.username ||
+    "Usuario";
+
   const initials = (() => {
     const parts = fullName.split(" ").filter(Boolean);
     if (parts.length === 0) return "U";
     if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   })();
- 
+
+  const handleLogout = async () => {
+    clearProject();
+    await logout();
+    navigate("/login");
+  };
+
+  // Volver a la selección de proyectos sin cerrar sesión
+  const handleSwitchProject = () => {
+    clearProject();
+    navigate("/proyectos");
+  };
+
   return (
     <header className="bg-card border-b border-border px-8 py-4 flex items-center justify-between shadow-sm">
+      {/* Info del proyecto activo */}
       <div>
-        <h2 className="text-2xl font-semibold text-foreground">{projectName}</h2>
-        <p className="text-sm text-muted-foreground">Sprint {sprintNumber} • {currentDate}</p>
+        <div className="flex items-center gap-2">
+          {activeProject && (
+            <div
+              className="w-3 h-3 rounded-full"
+              style={{ backgroundColor: activeProject.color }}
+            />
+          )}
+          <h2 className="text-xl font-semibold text-foreground">
+            {activeProject?.name || "Sin proyecto"}
+          </h2>
+        </div>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          Sprint {activeProject?.sprintCount ?? 0} • {currentDate}
+        </p>
       </div>
- 
-      <div className="flex items-center gap-4">
-        <button
-          className="bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors flex items-center gap-2"
-          title="Crear nuevo proyecto"
-        >
-          <Plus className="w-5 h-5" />
-          Nuevo Proyecto
-        </button>
 
+      <div className="flex items-center gap-3">
+        {/* Buscador */}
         <div className="relative">
-          {/* Input de búsqueda (solo UI por ahora) */}
           <Search className="w-5 h-5 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             placeholder="Buscar..."
-            className="pl-10 pr-4 py-2 border border-input rounded-lg focus:outline-none focus:border-primary w-64 bg-background"
+            className="pl-10 pr-4 py-2 border border-input rounded-lg focus:outline-none focus:border-primary w-56 bg-background text-sm"
           />
         </div>
- 
+
+        {/* Notificaciones */}
         <button className="relative p-2 hover:bg-muted rounded-lg transition-colors">
-          {/* Campana de notificaciones (placeholder visual) */}
           <Bell className="w-5 h-5 text-foreground" />
-          <span className="absolute top-1 right-1 w-2 h-2 bg-destructive rounded-full"></span>
+          <span className="absolute top-1 right-1 w-2 h-2 bg-destructive rounded-full" />
         </button>
- 
+
+        {/* Cambiar proyecto */}
+        <button
+          onClick={handleSwitchProject}
+          className="flex items-center gap-2 px-3 py-2 rounded-lg border border-input hover:bg-muted transition-colors text-sm"
+          title="Cambiar proyecto"
+        >
+          <FolderOpen className="w-4 h-4" />
+          <span className="hidden md:block">Proyectos</span>
+          <ChevronDown className="w-3 h-3 text-muted-foreground" />
+        </button>
+
+        {/* Logout */}
         <button
           onClick={handleLogout}
-          className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-input hover:bg-muted transition-colors"
+          className="flex items-center gap-2 px-3 py-2 rounded-lg border border-input hover:bg-muted transition-colors text-sm"
           title="Cerrar sesión"
         >
           <LogOut className="w-4 h-4" />
-          <span className="text-sm">Salir</span>
+          <span className="hidden md:block">Salir</span>
         </button>
- 
-        <div className="flex items-center gap-3 ml-2">
-          <div className="text-right">
-            <p className="text-sm font-medium text-foreground">{fullName}</p>
-            <p className="text-xs text-muted-foreground">Scrum Master</p>
+
+        {/* Avatar */}
+        <div className="flex items-center gap-2 ml-1">
+          <div className="text-right hidden md:block">
+            <p className="text-sm font-medium text-foreground leading-tight">{fullName}</p>
+            <p className="text-xs text-muted-foreground">{activeProject?.role || "Scrum Master"}</p>
           </div>
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-indigo-500 flex items-center justify-center text-primary-foreground font-medium shadow-md">
+          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary to-indigo-500 flex items-center justify-center text-primary-foreground text-sm font-semibold shadow-sm">
             {initials}
           </div>
         </div>
@@ -81,5 +105,5 @@ function TopBar({ projectName = "Nombre del Proyecto", sprintNumber = 12 }) {
     </header>
   );
 }
- 
+
 export default TopBar;

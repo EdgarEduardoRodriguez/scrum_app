@@ -3,15 +3,18 @@ import { createRoot } from 'react-dom/client'
 import './styles/index.css'
 import App from './App.jsx'
 import { AuthProvider } from './auth/AuthContext.jsx'
+import { ProjectProvider } from './context/ProjectContext.jsx'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     {/*
-      Authprovider envuelve toda la app.
-      asi cualquier componenete puede saber si hay sesion
+      AuthProvider: gestiona sesión JWT global.
+      ProjectProvider: gestiona el proyecto activo global.
     */}
-  <AuthProvider>
-    <App />
-  </AuthProvider>
+    <AuthProvider>
+      <ProjectProvider>
+        <App />
+      </ProjectProvider>
+    </AuthProvider>
   </StrictMode>,
 )
