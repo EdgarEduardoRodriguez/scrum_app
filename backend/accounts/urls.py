@@ -17,4 +17,8 @@ urlpatterns = [
     path("refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("logout/", views.logout, name="logout"),
     path("me/", views.me, name="me"),
+
+    # Projects
+    path("projects/", views.project_list_create, name="project_list_create"),
+    path("projects/<int:pk>/", views.project_detail, name="project_detail"),
 ]

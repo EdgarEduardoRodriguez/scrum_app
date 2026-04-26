@@ -9,7 +9,8 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 
-from .serializers import MeSerializer, RegisterSerializer
+from .models import Project
+from .serializers import MeSerializer, ProjectSerializer, RegisterSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -93,4 +94,52 @@ def me(request):
     # request.user viene resuelto por JWTAuthentication (DRF).
     return Response(MeSerializer(request.user).data)
 
-# Create your views here.
+
+# ------------------------------
+# Project API Views
+# ------------------------------
+
+@api_view(["GET", "POST"])
+@permission_classes([permissions.IsAuthenticated])
+def project_list_create(request):
+    """Lista proyectos del usuario o crea un nuevo proyecto."""
+    
+    if request.method == "GET":
+        # Obtener todos los proyectos del usuario autenticado
+        projects = Project.objects.filter(owner=request.user)
+        serializer = ProjectSerializer(projects, many=True)
+        return Response(serializer.data)
+    
+    elif request.method == "POST":
+        # Crear un nuevo proyecto
+        serializer = ProjectSerializer(data=request.data, context={"request": request})
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(["GET", "PUT", "DELETE"])
+@permission_classes([permissions.IsAuthenticated])
+def project_detail(request, pk):
+    """Obtiene, actualiza o elimina un proyecto específico."""
+    
+    try:
+        project = Project.objects.get(pk=pk, owner=request.user)
+    except Project.DoesNotExist:
+        return Response({"detail": "Proyecto no encontrado"}, status=status.HTTP_404_NOT_FOUND)
+    
+    if request.method == "GET":
+        serializer = ProjectSerializer(project)
+        return Response(serializer.data)
+    
+    elif request.method == "PUT":
+        serializer = ProjectSerializer(project, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    elif request.method == "DELETE":
+        project.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

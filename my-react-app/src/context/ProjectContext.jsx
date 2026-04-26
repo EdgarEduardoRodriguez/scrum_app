@@ -1,51 +1,87 @@
-import { createContext, useContext, useState, useMemo } from "react";
+import { createContext, useContext, useState, useMemo, useEffect } from "react";
+import { apiFetch } from "../utils/api";
+import { useAuth } from "../auth/AuthContext";
 
 const ProjectContext = createContext(null);
 
-// Proyectos de ejemplo (mock) — luego se reemplaza por llamadas al backend
-const MOCK_PROJECTS = [
-  {
-    id: "1",
-    name: "Sistema de Biblioteca Universitaria",
-    description: "Desarrollo de sistema para gestión de préstamos y catálogo",
-    color: "#007BFF",
-    sprintCount: 12,
-    tasksTotal: 182,
-    tasksCompleted: 124,
-    createdAt: "2024-01-15",
-    role: "Scrum Master",
-  },
-  {
-    id: "2",
-    name: "App Móvil de Pagos",
-    description: "Aplicación de pagos en línea para estudiantes universitarios",
-    color: "#7C3AED",
-    sprintCount: 6,
-    tasksTotal: 95,
-    tasksCompleted: 40,
-    createdAt: "2024-03-10",
-    role: "Developer",
-  },
-];
+// Map backend snake_case to frontend camelCase
+const mapBackendToFrontend = (project) => ({
+  id: project.id,
+  name: project.name,
+  description: project.description || "",
+  color: project.color || "#007BFF",
+  sprintCount: project.sprint_count || 0,
+  tasksTotal: project.tasks_total || 0,
+  tasksCompleted: project.tasks_completed || 0,
+  createdAt: project.created_at,
+  role: project.role || "Developer",
+});
+
+// Map frontend to backend
+const mapFrontendToBackend = (data) => ({
+  name: data.name,
+  description: data.description || "",
+  color: data.color || "#007BFF",
+  role: data.role || "Developer",
+});
 
 export function ProjectProvider({ children }) {
-  const [projects, setProjects] = useState(MOCK_PROJECTS);
+  const { isAuthenticated, user } = useAuth();
+  const [projects, setProjects] = useState([]);
   const [activeProject, setActiveProject] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const createProject = (data) => {
-    const newProject = {
-      id: `${Date.now()}`,
-      name: data.name,
-      description: data.description || "",
-      color: data.color || "#007BFF",
-      sprintCount: 0,
-      tasksTotal: 0,
-      tasksCompleted: 0,
-      createdAt: new Date().toISOString().split("T")[0],
-      role: "Scrum Master",
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setProjects([]);
+      setActiveProject(null);
+      setLoading(false);
+      return;
+    }
+
+    const loadProjects = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const res = await apiFetch("/api/auth/projects/");
+        if (res.ok) {
+          const data = await res.json();
+          setProjects(data.map(mapBackendToFrontend));
+        } else if (res.status === 401) {
+          setProjects([]);
+        } else {
+          setProjects([]);
+        }
+      } catch (err) {
+        console.error("Error loading projects:", err);
+        setError(err.message);
+        setProjects([]);
+      } finally {
+        setLoading(false);
+      }
     };
-    setProjects((prev) => [...prev, newProject]);
-    return newProject;
+    loadProjects();
+  }, [isAuthenticated, user?.id]);
+
+  const createProject = async (data) => {
+    try {
+      const res = await apiFetch("/api/auth/projects/", {
+        method: "POST",
+        body: JSON.stringify(mapFrontendToBackend(data)),
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.detail || "Error creating project");
+      }
+      const newProject = await res.json();
+      const mappedProject = mapBackendToFrontend(newProject);
+      setProjects((prev) => [...prev, mappedProject]);
+      return mappedProject;
+    } catch (err) {
+      console.error("Error creating project:", err);
+      throw err;
+    }
   };
 
   const selectProject = (project) => {
@@ -57,8 +93,16 @@ export function ProjectProvider({ children }) {
   };
 
   const value = useMemo(
-    () => ({ projects, activeProject, createProject, selectProject, clearProject }),
-    [projects, activeProject]
+    () => ({
+      projects,
+      activeProject,
+      loading,
+      error,
+      createProject,
+      selectProject,
+      clearProject,
+    }),
+    [projects, activeProject, loading, error]
   );
 
   return (
