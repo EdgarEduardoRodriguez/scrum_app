@@ -3,6 +3,7 @@ import { UserPlus, ShieldCheck, ChevronDown, Check, Users } from "lucide-react";
 import { useProject } from "../context/ProjectContext";
 import { useAuth } from "../auth/AuthContext";
 import InviteModal from "../components/InviteModal";
+import { apiFetch } from "../utils/api";
 
 const ROLE_OPTIONS = ["Developer", "Tester", "Product Owner", "Observer"];
 
@@ -82,6 +83,18 @@ function RoleSelector({ currentRole, memberId, onRoleChange }) {
   );
 }
 
+function mapMemberFromApi(member) {
+  return {
+    id: String(member.id),
+    user_id: String(member.user_id),
+    first_name: member.first_name || "",
+    last_name: member.last_name || "",
+    email: member.email || member.username || "",
+    role: member.role,
+    joined_at: member.joined_at,
+  };
+}
+
 // ─── Página principal ─────────────────────────────────────────────────────
 export default function TeamPage() {
   const { activeProject } = useProject();
@@ -89,54 +102,26 @@ export default function TeamPage() {
   const [members, setMembers] = useState([]);
   const [showInviteModal, setShowInviteModal] = useState(false);
 
-  // Cargar miembros al montar o cambiar de proyecto
+  // Cargar miembros reales del backend al montar o cambiar de proyecto
   useEffect(() => {
     if (!activeProject?.id) return;
 
-    const stored = loadMembers(activeProject.id);
-    if (stored) {
-      setMembers(stored);
-    } else if (user) {
-      // Primera vez: el creador del proyecto es Scrum Master
-      const initialMembers = [{
-        id: String(user.id),
-        user_id: String(user.id),
-        first_name: user.first_name || "Usuario",
-        last_name: user.last_name || "",
-        email: user.email || user.username || "",
-        role: "Scrum Master",
-        joined_at: new Date().toISOString(),
-      }];
-      setMembers(initialMembers);
-      saveMembers(activeProject.id, initialMembers);
-    }
-  }, [activeProject?.id, user]);
-
-  // Revisar si el usuario aceptó alguna invitación pendiente (para mostrarlo en la lista)
-  useEffect(() => {
-    if (!activeProject?.id || !user) return;
-    const JOINED_KEY = `scrum_joined_projects_${user.id}`;
-    try {
-      const joined = JSON.parse(localStorage.getItem(JOINED_KEY) || "[]");
-      const match = joined.find((j) => j.project_id === activeProject.id);
-      if (match) {
-        setMembers((prev) => {
-          const alreadyIn = prev.find((m) => m.user_id === String(user.id));
-          if (alreadyIn) return prev;
-          const updated = [...prev, {
-            id: String(user.id),
-            user_id: String(user.id),
-            first_name: user.first_name || "Usuario",
-            last_name: user.last_name || "",
-            email: user.email || user.username || "",
-            role: match.role,
-            joined_at: match.joined_at,
-          }];
-          saveMembers(activeProject.id, updated);
-          return updated;
-        });
+    const loadMembersFromApi = async () => {
+      try {
+        const res = await apiFetch(`/api/auth/projects/${activeProject.id}/`);
+        if (!res.ok) {
+          setMembers([]);
+          return;
+        }
+        const data = await res.json();
+        const mapped = (data.members || []).map(mapMemberFromApi);
+        setMembers(mapped);
+      } catch {
+        setMembers([]);
       }
-    } catch { /* silencioso */ }
+    };
+
+    loadMembersFromApi();
   }, [activeProject?.id, user]);
 
   // ¿El usuario actual es Scrum Master de este proyecto?
@@ -148,7 +133,6 @@ export default function TeamPage() {
   const handleRoleChange = (memberId, newRole) => {
     setMembers((prev) => {
       const updated = prev.map((m) => m.id === memberId ? { ...m, role: newRole } : m);
-      saveMembers(activeProject.id, updated);
       return updated;
     });
   };

@@ -1,49 +1,24 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { apiFetch } from "../utils/api";
 
 const NotificationContext = createContext(null);
 
-// ─── Clave de invitaciones pendientes ─────────────────────────────────────
-function pendingKey(userId) {
-  return `scrum_pending_invitations_${userId}`;
-}
-
-// ─── Lee invitaciones del localStorage y las convierte en notificaciones ──
-function loadNotificationsForUser(userId) {
-  try {
-    const raw = localStorage.getItem(pendingKey(userId));
-    const invitations = raw ? JSON.parse(raw) : [];
-    return invitations.map((inv) => ({
-      id: `notif-${inv.id}`,
-      type: "project_invitation",
-      read: inv.status !== "pending",
-      created_at: inv.invited_at,
-      _responded: inv.status !== "pending" ? inv.status : undefined,
-      payload: {
-        invitation_id: inv.id,
-        project_id: inv.project_id,
-        project_name: inv.project_name,
-        invited_by_name: inv.invited_by || "Un compañero",
-        role: inv.role,
-      },
-    }));
-  } catch {
-    return [];
-  }
-}
-
-// Actualiza el estado de una invitación en localStorage
-function updateInvitationStatus(userId, invitationId, status) {
-  try {
-    const key = pendingKey(userId);
-    const raw = localStorage.getItem(key);
-    const invitations = raw ? JSON.parse(raw) : [];
-    const updated = invitations.map((inv) =>
-      inv.id === invitationId ? { ...inv, status } : inv
-    );
-    localStorage.setItem(key, JSON.stringify(updated));
-  } catch {
-    // silencioso
-  }
+function mapInvitationToNotification(inv) {
+  const responded = inv.status === "accepted" ? "accept" : inv.status === "rejected" ? "reject" : undefined;
+  return {
+    id: `notif-${inv.id}`,
+    type: "project_invitation",
+    read: inv.status !== "pending" || !!inv.is_read,
+    created_at: inv.created_at,
+    _responded: responded,
+    payload: {
+      invitation_id: inv.id,
+      project_id: inv.project_id,
+      project_name: inv.project_name,
+      invited_by_name: inv.invited_by_name || "Un compañero",
+      role: inv.role,
+    },
+  };
 }
 
 // ─── Provider ─────────────────────────────────────────────────────────────
@@ -68,12 +43,21 @@ export function NotificationProvider({ children }) {
     }
   }, []);
 
-  const fetchNotifications = useCallback(() => {
+  const fetchNotifications = useCallback(async () => {
     const uid = resolveUserId();
     setUserId(uid);
     if (!uid) { setNotifications([]); return; }
-    const notifs = loadNotificationsForUser(uid);
-    setNotifications(notifs);
+    try {
+      const res = await apiFetch("/api/auth/invitations/");
+      if (!res.ok) {
+        setNotifications([]);
+        return;
+      }
+      const invitations = await res.json();
+      setNotifications(invitations.map(mapInvitationToNotification));
+    } catch {
+      setNotifications([]);
+    }
   }, [resolveUserId]);
 
   useEffect(() => {
@@ -96,47 +80,22 @@ export function NotificationProvider({ children }) {
 
   // Aceptar o rechazar invitación
   const respondToInvitation = useCallback(
-    (notificationId, invitationId, action) => {
-      const uid = resolveUserId();
-
-      // Actualizar en localStorage
-      if (uid) updateInvitationStatus(uid, invitationId, action);
-
-      // Actualizar estado local
-      setNotifications((prev) =>
-        prev.map((n) =>
-          n.id === notificationId
-            ? { ...n, read: true, _responded: action }
-            : n
-        )
-      );
-
-      // Si aceptó: agregar el proyecto a su lista visible
-      if (action === "accept") {
-        try {
-          const raw = localStorage.getItem(pendingKey(uid));
-          const invitations = raw ? JSON.parse(raw) : [];
-          const inv = invitations.find((i) => i.id === invitationId);
-          if (inv) {
-            const JOINED_KEY = `scrum_joined_projects_${uid}`;
-            const joined = JSON.parse(localStorage.getItem(JOINED_KEY) || "[]");
-            const alreadyJoined = joined.find((p) => p.project_id === inv.project_id);
-            if (!alreadyJoined) {
-              joined.push({
-                project_id: inv.project_id,
-                project_name: inv.project_name,
-                role: inv.role,
-                joined_at: new Date().toISOString(),
-              });
-              localStorage.setItem(JOINED_KEY, JSON.stringify(joined));
-            }
-          }
-        } catch {
-          // silencioso
+    async (_notificationId, invitationId, action) => {
+      try {
+        const res = await apiFetch(`/api/auth/invitations/${invitationId}/respond/`, {
+          method: "POST",
+          body: JSON.stringify({ action }),
+        });
+        if (!res.ok) return;
+        await fetchNotifications();
+        if (action === "accept") {
+          window.dispatchEvent(new Event("projects:refresh"));
         }
+      } catch {
+        // silencioso
       }
     },
-    [resolveUserId]
+    [fetchNotifications]
   );
 
   const value = useMemo(

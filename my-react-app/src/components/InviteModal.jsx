@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { X, Search, UserPlus, Loader2, Check } from "lucide-react";
-import { getRegisteredUsers } from "../context/UserContext";
+import { apiFetch } from "../utils/api";
 
 const ROLES = [
   { value: "Developer",     label: "Developer",     desc: "Desarrolla funcionalidades y mueve tareas" },
@@ -27,28 +27,34 @@ export default function InviteModal({ projectId, projectName, existingMemberIds 
   const [sending, setSending]         = useState(false);
   const [sent, setSent]               = useState(false);
   const [error, setError]             = useState("");
+  const [searching, setSearching]     = useState(false);
   const inputRef  = useRef(null);
   const debounceRef = useRef(null);
 
   useEffect(() => { inputRef.current?.focus(); }, []);
 
-  // Búsqueda en tiempo real sobre usuarios registrados en localStorage
+  // Búsqueda en tiempo real contra backend (usuarios con cuenta)
   useEffect(() => {
     clearTimeout(debounceRef.current);
     if (!query.trim() || query.length < 2) { setResults([]); return; }
 
-    debounceRef.current = setTimeout(() => {
-      const q = query.toLowerCase();
-      const all = getRegisteredUsers();
-      const filtered = all.filter(
-        (u) =>
-          !existingMemberIds.includes(String(u.id)) &&
-          (
-            `${u.first_name} ${u.last_name}`.toLowerCase().includes(q) ||
-            u.email.toLowerCase().includes(q)
-          )
-      );
-      setResults(filtered);
+    debounceRef.current = setTimeout(async () => {
+      try {
+        setSearching(true);
+        const res = await apiFetch(`/api/auth/projects/${projectId}/users/search/?q=${encodeURIComponent(query.trim())}`);
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || "No se pudo buscar usuarios");
+        }
+        const users = await res.json();
+        const filtered = users.filter((u) => !existingMemberIds.includes(String(u.id)));
+        setResults(filtered);
+      } catch (e) {
+        setResults([]);
+        setError(e.message || "Error buscando usuarios");
+      } finally {
+        setSearching(false);
+      }
     }, 200);
 
     return () => clearTimeout(debounceRef.current);
@@ -68,40 +74,33 @@ export default function InviteModal({ projectId, projectName, existingMemberIds 
     setTimeout(() => inputRef.current?.focus(), 0);
   };
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!selectedUser) { setError("Selecciona un usuario primero."); return; }
     setSending(true);
     setError("");
 
-    // Guardar invitación pendiente en localStorage para que el usuario invitado la vea
     try {
-      const PENDING_KEY = `scrum_pending_invitations_${selectedUser.id}`;
-      const pending = JSON.parse(localStorage.getItem(PENDING_KEY) || "[]");
-      const alreadyInvited = pending.find((i) => i.project_id === projectId && i.status === "pending");
-      if (alreadyInvited) {
-        setError("Este usuario ya tiene una invitación pendiente para este proyecto.");
-        setSending(false);
-        return;
-      }
-      pending.push({
-        id: `inv-${Date.now()}`,
-        project_id: projectId,
-        project_name: projectName,
-        role: selectedRole,
-        status: "pending",
-        invited_at: new Date().toISOString(),
+      const res = await apiFetch(`/api/auth/projects/${projectId}/members/`, {
+        method: "POST",
+        body: JSON.stringify({
+          user_id: selectedUser.id,
+          role: selectedRole,
+        }),
       });
-      localStorage.setItem(PENDING_KEY, JSON.stringify(pending));
-    } catch {
-      // silencioso
-    }
 
-    setTimeout(() => {
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "No se pudo enviar la invitación");
+      }
+
       setSending(false);
       setSent(true);
       onInvited?.({ user: selectedUser, role: selectedRole });
       setTimeout(onClose, 1400);
-    }, 600);
+    } catch (e) {
+      setSending(false);
+      setError(e.message || "No se pudo enviar la invitación");
+    }
   };
 
   useEffect(() => {
@@ -150,6 +149,12 @@ export default function InviteModal({ projectId, projectName, existingMemberIds 
             </div>
 
             {/* Dropdown de resultados */}
+            {searching && !selectedUser && (
+              <p className="text-xs text-muted-foreground mt-2 pl-1 flex items-center gap-1.5">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Buscando usuarios...
+              </p>
+            )}
+
             {results.length > 0 && !selectedUser && (
               <div className="mt-1 border border-border rounded-lg overflow-hidden shadow-md bg-card">
                 {results.map((user) => (

@@ -21,4 +21,10 @@ urlpatterns = [
     # Projects
     path("projects/", views.project_list_create, name="project_list_create"),
     path("projects/<int:pk>/", views.project_detail, name="project_detail"),
+    path("projects/<int:pk>/members/", views.add_project_member, name="add_project_member"),
+    path("projects/<int:pk>/users/search/", views.search_users_for_project, name="search_users_for_project"),
+
+    # Invitations
+    path("invitations/", views.my_invitations, name="my_invitations"),
+    path("invitations/<int:invitation_id>/respond/", views.respond_invitation, name="respond_invitation"),
 ]

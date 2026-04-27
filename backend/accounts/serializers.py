@@ -1,12 +1,31 @@
 from django.contrib.auth.models import User
 from rest_framework import serializers
 
-from .models import Project
+from .models import Project, ProjectInvitation, ProjectMember
 
 
-# Serializer para proyectos
+# Serializer para miembros de proyecto
+class ProjectMemberSerializer(serializers.ModelSerializer):
+    """Serializer para el modelo ProjectMember."""
+
+    user_id = serializers.IntegerField(source="user.id", read_only=True)
+    username = serializers.CharField(source="user.username", read_only=True)
+    first_name = serializers.CharField(source="user.first_name", read_only=True)
+    last_name = serializers.CharField(source="user.last_name", read_only=True)
+
+    class Meta:
+        model = ProjectMember
+        fields = ["id", "user_id", "username", "first_name", "last_name", "role", "joined_at"]
+        read_only_fields = ["id", "joined_at"]
+
+
+# Serializer para proyectos (con miembros)
 class ProjectSerializer(serializers.ModelSerializer):
     """Serializer para el modelo Project."""
+
+    members = ProjectMemberSerializer(many=True, read_only=True)
+    # Rol del usuario actual en este proyecto
+    my_role = serializers.SerializerMethodField()
 
     class Meta:
         model = Project
@@ -15,13 +34,14 @@ class ProjectSerializer(serializers.ModelSerializer):
             "name",
             "description",
             "color",
-            "role",
+            "members",
+            "my_role",
             "sprint_count",
             "tasks_total",
             "tasks_completed",
             "created_at",
         ]
-        read_only_fields = ["id", "owner", "created_at", "sprint_count", "tasks_total", "tasks_completed"]
+        read_only_fields = ["id", "created_at", "sprint_count", "tasks_total", "tasks_completed"]
 
     # Campos calculados (no se guardan en BD, se calculan al vuelo)
     sprint_count = serializers.SerializerMethodField()
@@ -29,7 +49,6 @@ class ProjectSerializer(serializers.ModelSerializer):
     tasks_completed = serializers.SerializerMethodField()
 
     def get_sprint_count(self, obj):
-        # Por ahora devolvemos 0, ya que no hay modelo de Sprint todavía
         return getattr(obj, "_sprint_count", 0)
 
     def get_tasks_total(self, obj):
@@ -38,10 +57,61 @@ class ProjectSerializer(serializers.ModelSerializer):
     def get_tasks_completed(self, obj):
         return getattr(obj, "_tasks_completed", 0)
 
+    def get_my_role(self, obj):
+        """Retorna el rol del usuario actual en el proyecto."""
+        request = self.context.get("request")
+        if request and request.user.is_authenticated:
+            membership = obj.members.filter(user=request.user).first()
+            if membership:
+                return membership.role
+        return None
+
     def create(self, validated_data):
-        # Asignar el propietario al proyecto desde el usuario autenticado
-        validated_data["owner"] = self.context["request"].user
-        return super().create(validated_data)
+        # Crear el proyecto
+        project = Project.objects.create(**validated_data)
+        # Agregar al creador como Scrum Master
+        ProjectMember.objects.create(
+            project=project,
+            user=self.context["request"].user,
+            role="Scrum Master"
+        )
+        return project
+
+
+# Serializer para crear/actualizar miembros
+class AddMemberSerializer(serializers.Serializer):
+    """Serializer para agregar un miembro al proyecto."""
+
+    user_id = serializers.IntegerField()
+    role = serializers.ChoiceField(choices=ProjectMember.ROLES, default="Developer")
+
+
+class ProjectInvitationSerializer(serializers.ModelSerializer):
+    """Serializer para invitaciones de proyecto."""
+
+    invitation_id = serializers.CharField(source="id", read_only=True)
+    project_id = serializers.IntegerField(source="project.id", read_only=True)
+    project_name = serializers.CharField(source="project.name", read_only=True)
+    invited_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProjectInvitation
+        fields = [
+            "id",
+            "invitation_id",
+            "project_id",
+            "project_name",
+            "invited_by_name",
+            "role",
+            "status",
+            "is_read",
+            "created_at",
+            "responded_at",
+        ]
+
+    def get_invited_by_name(self, obj):
+        name = f"{obj.invited_by.first_name} {obj.invited_by.last_name}".strip()
+        return name or obj.invited_by.username
 
 
 # Serializer para validar y crear usuarios desde el endpoint de registro.

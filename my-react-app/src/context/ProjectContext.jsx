@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useMemo, useEffect } from "react";
+import { createContext, useContext, useState, useMemo, useEffect, useCallback } from "react";
 import { apiFetch } from "../utils/api";
 import { useAuth } from "../auth/AuthContext";
 
@@ -14,7 +14,7 @@ const mapBackendToFrontend = (project) => ({
   tasksTotal: project.tasks_total || 0,
   tasksCompleted: project.tasks_completed || 0,
   createdAt: project.created_at,
-  role: project.role || "Developer",
+  role: project.my_role || "Developer",
 });
 
 // Map frontend to backend
@@ -22,7 +22,6 @@ const mapFrontendToBackend = (data) => ({
   name: data.name,
   description: data.description || "",
   color: data.color || "#007BFF",
-  role: data.role || "Developer",
 });
 
 export function ProjectProvider({ children }) {
@@ -32,7 +31,7 @@ export function ProjectProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
+  const loadProjects = useCallback(async () => {
     if (!isAuthenticated) {
       setProjects([]);
       setActiveProject(null);
@@ -40,29 +39,34 @@ export function ProjectProvider({ children }) {
       return;
     }
 
-    const loadProjects = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const res = await apiFetch("/api/auth/projects/");
-        if (res.ok) {
-          const data = await res.json();
-          setProjects(data.map(mapBackendToFrontend));
-        } else if (res.status === 401) {
-          setProjects([]);
-        } else {
-          setProjects([]);
-        }
-      } catch (err) {
-        console.error("Error loading projects:", err);
-        setError(err.message);
+    try {
+      setLoading(true);
+      setError(null);
+      const res = await apiFetch("/api/auth/projects/");
+      if (res.ok) {
+        const data = await res.json();
+        setProjects(data.map(mapBackendToFrontend));
+      } else {
         setProjects([]);
-      } finally {
-        setLoading(false);
       }
-    };
+    } catch (err) {
+      console.error("Error loading projects:", err);
+      setError(err.message);
+      setProjects([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [isAuthenticated]);
+
+  useEffect(() => {
     loadProjects();
-  }, [isAuthenticated, user?.id]);
+  }, [loadProjects, user?.id]);
+
+  useEffect(() => {
+    const handler = () => loadProjects();
+    window.addEventListener("projects:refresh", handler);
+    return () => window.removeEventListener("projects:refresh", handler);
+  }, [loadProjects]);
 
   const createProject = async (data) => {
     try {
