@@ -1,7 +1,8 @@
 import { useState } from "react";
 import KanbanBoard from "../components/KanbanBoard";
 import KanbanColumn from "../components/KanbanColumn";
-import { Task, TaskStatus } from "../types/task";
+import AddTaskModal from "../components/AddTaskModal";
+import { TaskStatus } from "../types/task";
 
 const mockTasksData = [
   {
@@ -89,20 +90,18 @@ const mockTasksData = [
 
 function KanbanPage() {
   const [tasks, setTasks] = useState(mockTasksData);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
-  const handleAddTask = () => {
-    const colors = ["#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6"];
-    const randomColor = colors[Math.floor(Math.random() * colors.length)];
-    
-    const newTaskId = `task-${tasks.length + 1}`;
+  const handleAddTask = (data) => {
+    const newTaskId = `task-${tasks.length + 1}-${Date.now()}`;
     const newTask = {
       id: newTaskId,
-      title: `Nueva Tarea ${tasks.length + 1}`,
-      description: "Descripción de la nueva tarea.",
+      title: data.title,
+      description: "Tarea agregada desde Product Backlog",
       status: TaskStatus.TODO,
-      priority: "Media",
-      assignee: "Sin asignar",
-      avatarColor: randomColor,
+      priority: data.priority,
+      assignee: data.assignee,
+      avatarColor: data.avatarColor,
       createdAt: new Date(),
       statusHistory: [
         { status: TaskStatus.TODO, changedAt: new Date(), changedBy: "System" },
@@ -111,6 +110,7 @@ function KanbanPage() {
       timeEntries: [],
     };
     setTasks((prevTasks) => [...prevTasks, newTask]);
+    setIsAddModalOpen(false);
   };
 
   const todoTasks = tasks.filter((task) => task.status === TaskStatus.TODO);
@@ -119,28 +119,34 @@ function KanbanPage() {
 
   return (
     <div className="p-6">
-      <h1 className="text-3xl font-bold text-slate-800 mb-6">Kanban Board</h1>
+      <h1 className="text-3xl font-bold text-slate-800 mb-6">Tareas del Proyecto</h1>
 
       <KanbanBoard>
         <KanbanColumn
           title="Por Hacer"
           tasks={todoTasks}
           count={todoTasks.length}
-          onAddTask={handleAddTask}
+          onAddTask={() => setIsAddModalOpen(true)}
         />
         <KanbanColumn
           title="En Progreso"
           tasks={inProgressTasks}
           count={inProgressTasks.length}
-          onAddTask={handleAddTask}
+          onAddTask={() => setIsAddModalOpen(true)}
         />
         <KanbanColumn
           title="Hecho"
           tasks={doneTasks}
           count={doneTasks.length}
-          onAddTask={handleAddTask}
+          onAddTask={() => setIsAddModalOpen(true)}
         />
       </KanbanBoard>
+
+      <AddTaskModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        onSave={handleAddTask}
+      />
     </div>
   );
 }

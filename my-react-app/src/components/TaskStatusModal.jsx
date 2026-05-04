@@ -13,15 +13,15 @@ import { Clock, User, Check, Timer, TrendingUp, Calendar } from "lucide-react";
 import { Task, TaskStatus, StatusHistoryEntry, TimeEntry } from "../types/task";
 
 const statusColors = {
-  "To Do": "bg-slate-500",
-  "In Progress": "bg-blue-500",
-  "Done": "bg-green-500",
+  "Por Hacer": "bg-slate-500",
+  "En Progreso": "bg-blue-500",
+  "Hecho": "bg-green-500",
 };
 
 const statusIcons = {
-  "To Do": "○",
-  "In Progress": "◐",
-  "Done": "●",
+  "Por Hacer": "○",
+  "En Progreso": "◐",
+  "Hecho": "●",
 };
 
 export function TaskStatusModal({ task, isOpen, onClose, onSave, onLogTime }) {
@@ -92,14 +92,14 @@ export function TaskStatusModal({ task, isOpen, onClose, onSave, onLogTime }) {
         onKeyDown={handleKeyDown}
       >
         <DialogHeader>
-          <DialogTitle className="text-2xl font-semibold">Task Details</DialogTitle>
+          <DialogTitle className="text-2xl font-semibold">Detalles de la Tarea</DialogTitle>
           <p className="text-sm text-muted-foreground mt-1">{task.title}</p>
         </DialogHeader>
 
         <Tabs defaultValue="status" className="flex-1 overflow-hidden flex flex-col">
           <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="status">Status & History</TabsTrigger>
-            <TabsTrigger value="time">Time Tracking</TabsTrigger>
+            <TabsTrigger value="status">Estado e Historial</TabsTrigger>
+            <TabsTrigger value="time">Seguimiento de Tiempo</TabsTrigger>
           </TabsList>
 
           <TabsContent value="status" className="flex-1 overflow-y-auto space-y-6 py-4">
@@ -108,7 +108,7 @@ export function TaskStatusModal({ task, isOpen, onClose, onSave, onLogTime }) {
               <div className="flex items-center gap-2">
                 <span className="text-2xl">{statusIcons[task.status]}</span>
                 <div>
-                  <p className="text-xs text-muted-foreground">Current Status</p>
+                  <p className="text-xs text-muted-foreground">Estado Actual</p>
                   <p className="font-medium">{task.status}</p>
                 </div>
               </div>
@@ -117,7 +117,7 @@ export function TaskStatusModal({ task, isOpen, onClose, onSave, onLogTime }) {
             {/* Status Selector */}
             <div className="space-y-2">
               <Label htmlFor="status-select" className="text-sm font-medium">
-                Update Status
+                Actualizar Estado
               </Label>
               <Select value={selectedStatus} onValueChange={(value) => setSelectedStatus(value)}>
                 <SelectTrigger id="status-select" className="w-full">
@@ -127,19 +127,19 @@ export function TaskStatusModal({ task, isOpen, onClose, onSave, onLogTime }) {
                   <SelectItem value={TaskStatus.TODO}>
                     <div className="flex items-center gap-2">
                       <span className={`w-2 h-2 rounded-full ${statusColors[TaskStatus.TODO]}`} />
-                      <span>To Do</span>
+                      <span>Por Hacer</span>
                     </div>
                   </SelectItem>
                   <SelectItem value={TaskStatus.IN_PROGRESS}>
                     <div className="flex items-center gap-2">
                       <span className={`w-2 h-2 rounded-full ${statusColors[TaskStatus.IN_PROGRESS]}`} />
-                      <span>In Progress</span>
+                      <span>En Progreso</span>
                     </div>
                   </SelectItem>
                   <SelectItem value={TaskStatus.DONE}>
                     <div className="flex items-center gap-2">
                       <span className={`w-2 h-2 rounded-full ${statusColors[TaskStatus.DONE]}`} />
-                      <span>Done</span>
+                      <span>Hecho</span>
                     </div>
                   </SelectItem>
                 </SelectContent>
@@ -147,27 +147,27 @@ export function TaskStatusModal({ task, isOpen, onClose, onSave, onLogTime }) {
               {hasChanges && (
                 <p className="text-xs text-muted-foreground flex items-center gap-1">
                   <Check className="w-3 h-3" />
-                  Status will be updated to <strong>{selectedStatus}</strong>
+                  El estado se actualizará a <strong>{selectedStatus}</strong>
                 </p>
               )}
             </div>
 
             {/* History Log */}
             <div className="space-y-2">
-              <Label className="text-sm font-medium">Change History</Label>
+              <Label className="text-sm font-medium">Historial de Cambios</Label>
               <ScrollArea className="h-[200px] rounded-md border p-4">
                 {task.statusHistory.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-8">No history available</p>
+                  <p className="text-sm text-muted-foreground text-center py-8">Sin historial disponible</p>
                 ) : (
                   <div className="space-y-3">
                     {task.statusHistory.map((entry, index) => (
-                      <div 
-                        key={index} 
+                      <div
+                        key={index}
                         className="flex gap-3 pb-3 border-b last:border-b-0 last:pb-0"
                       >
                         <div className="flex-shrink-0 mt-1">
-                          <Badge 
-                            variant="outline" 
+                          <Badge
+                            variant="outline"
                             className={`${statusColors[entry.status]} text-white border-none`}
                           >
                             {entry.status}
@@ -195,10 +195,10 @@ export function TaskStatusModal({ task, isOpen, onClose, onSave, onLogTime }) {
 
             {/* Keyboard Shortcuts Hint */}
             <div className="text-xs text-muted-foreground bg-muted/30 p-3 rounded-md">
-              <p className="font-medium mb-1">💡 Quick Actions:</p>
+              <p className="font-medium mb-1">💡 Acciones Rápidas:</p>
               <div className="space-y-0.5 ml-4">
-                <p><kbd className="px-1.5 py-0.5 bg-background rounded border text-xs">⌘/Ctrl + Enter</kbd> Save changes</p>
-                <p><kbd className="px-1.5 py-0.5 bg-background rounded border text-xs">Esc</kbd> Close without saving</p>
+                <p><kbd className="px-1.5 py-0.5 bg-background rounded border text-xs">⌘/Ctrl + Enter</kbd> Guardar cambios</p>
+                <p><kbd className="px-1.5 py-0.5 bg-background rounded border text-xs">Esc</kbd> Cerrar sin guardar</p>
               </div>
             </div>
           </TabsContent>
@@ -209,21 +209,21 @@ export function TaskStatusModal({ task, isOpen, onClose, onSave, onLogTime }) {
               <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
                 <div className="flex items-center gap-2 text-blue-600 mb-1">
                   <TrendingUp className="w-4 h-4" />
-                  <p className="text-xs font-medium">Estimated</p>
+                  <p className="text-xs font-medium">Estimado</p>
                 </div>
                 <p className="text-2xl font-bold">{task.estimatedHours}h</p>
               </div>
               <div className="p-4 bg-purple-500/10 border border-purple-500/20 rounded-lg">
                 <div className="flex items-center gap-2 text-purple-600 mb-1">
                   <Timer className="w-4 h-4" />
-                  <p className="text-xs font-medium">Logged</p>
+                  <p className="text-xs font-medium">Registrado</p>
                 </div>
                 <p className="text-2xl font-bold">{totalHoursLogged.toFixed(1)}h</p>
               </div>
               <div className={`p-4 border rounded-lg ${isOverBudget ? 'bg-red-500/10 border-red-500/20' : 'bg-green-500/10 border-green-500/20'}`}>
                 <div className={`flex items-center gap-2 mb-1 ${isOverBudget ? 'text-red-600' : 'text-green-600'}`}>
                   <Clock className="w-4 h-4" />
-                  <p className="text-xs font-medium">Remaining</p>
+                  <p className="text-xs font-medium">Restante</p>
                 </div>
                 <p className="text-2xl font-bold">{remainingHours.toFixed(1)}h</p>
               </div>
@@ -232,7 +232,7 @@ export function TaskStatusModal({ task, isOpen, onClose, onSave, onLogTime }) {
             {/* Progress Bar */}
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Time Progress</span>
+                <span className="text-muted-foreground">Progreso de Tiempo</span>
                 <span className={`font-medium ${isOverBudget ? 'text-red-600' : 'text-foreground'}`}>
                   {progressPercentage.toFixed(0)}%
                 </span>
@@ -245,7 +245,7 @@ export function TaskStatusModal({ task, isOpen, onClose, onSave, onLogTime }) {
               </div>
               {isOverBudget && (
                 <p className="text-xs text-red-600 flex items-center gap-1">
-                  ⚠️ Over budget by {(totalHoursLogged - task.estimatedHours).toFixed(1)} hours
+                  ⚠️ Sobre presupuesto por {(totalHoursLogged - task.estimatedHours).toFixed(1)} horas
                 </p>
               )}
             </div>
@@ -256,27 +256,27 @@ export function TaskStatusModal({ task, isOpen, onClose, onSave, onLogTime }) {
             <div className="space-y-4 p-4 bg-muted/30 rounded-lg border">
               <h4 className="font-medium flex items-center gap-2">
                 <Timer className="w-4 h-4" />
-                Log Time Worked
+                Registrar Tiempo Trabajado
               </h4>
               <div className="grid gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="hours-input">Hours Worked *</Label>
+                  <Label htmlFor="hours-input">Horas Trabajadas *</Label>
                   <Input
                     id="hours-input"
                     type="number"
                     step="0.5"
                     min="0"
-                    placeholder="e.g., 2.5"
+                    placeholder="ej. 2.5"
                     value={hoursToLog}
                     onChange={(e) => setHoursToLog(e.target.value)}
                     className="w-full"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="time-note">Note (optional)</Label>
+                  <Label htmlFor="time-note">Nota (opcional)</Label>
                   <Textarea
                     id="time-note"
-                    placeholder="What did you work on?"
+                    placeholder="¿En qué trabajaste?"
                     value={timeNote}
                     onChange={(e) => setTimeNote(e.target.value)}
                     rows={2}
@@ -289,22 +289,22 @@ export function TaskStatusModal({ task, isOpen, onClose, onSave, onLogTime }) {
                   className="w-full gap-2"
                 >
                   <Check className="w-4 h-4" />
-                  Log Time
+                  Registrar Tiempo
                 </Button>
               </div>
             </div>
 
             {/* Time Entry History */}
             <div className="space-y-2">
-              <Label className="text-sm font-medium">Time Log History</Label>
+              <Label className="text-sm font-medium">Historial de Tiempo</Label>
               <ScrollArea className="h-[200px] rounded-md border p-4">
                 {task.timeEntries.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-8">No time logged yet</p>
+                  <p className="text-sm text-muted-foreground text-center py-8">Sin tiempo registrado</p>
                 ) : (
                   <div className="space-y-3">
                     {[...task.timeEntries].reverse().map((entry, index) => (
-                      <div 
-                        key={index} 
+                      <div
+                        key={index}
                         className="flex gap-3 pb-3 border-b last:border-b-0 last:pb-0"
                       >
                         <div className="flex-shrink-0 mt-1">
@@ -336,15 +336,15 @@ export function TaskStatusModal({ task, isOpen, onClose, onSave, onLogTime }) {
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
-            Close
+            Cerrar
           </Button>
-          <Button 
-            onClick={handleSave} 
+          <Button
+            onClick={handleSave}
             disabled={!hasChanges}
             className="gap-2"
           >
             <Check className="w-4 h-4" />
-            Save Status
+            Guardar Estado
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -366,15 +366,15 @@ function formatDate(date) {
   const days = Math.floor(hours / 24);
 
   if (seconds < 60) {
-    return "Just now";
+    return "Ahora mismo";
   } else if (minutes < 60) {
-    return `${minutes} minute${minutes !== 1 ? "s" : ""} ago`;
+    return `hace ${minutes} minuto${minutes !== 1 ? "s" : ""}`;
   } else if (hours < 24) {
-    return `${hours} hour${hours !== 1 ? "s" : ""} ago`;
+    return `hace ${hours} hora${hours !== 1 ? "s" : ""}`;
   } else if (days < 7) {
-    return `${days} day${days !== 1 ? "s" : ""} ago`;
+    return `hace ${days} día${days !== 1 ? "s" : ""}`;
   } else {
-    return date.toLocaleDateString("en-US", {
+    return date.toLocaleDateString("es-ES", {
       month: "short",
       day: "numeric",
       year: date.getFullYear() !== now.getFullYear() ? "numeric" : undefined,

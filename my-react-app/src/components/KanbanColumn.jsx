@@ -9,7 +9,7 @@ function KanbanColumn({ title, tasks, count, onAddTask }) {
           {count}
         </span>
       </div>
-      
+
       <div className="space-y-3 flex-1">
         {tasks.map((task) => (
           <TaskCard
@@ -22,14 +22,16 @@ function KanbanColumn({ title, tasks, count, onAddTask }) {
           />
         ))}
       </div>
-      
-      <button 
-        className="mt-4 w-full py-2 border-2 border-dashed border-slate-300 rounded-lg text-slate-500 hover:border-[#007BFF] hover:text-[#007BFF] transition-colors flex items-center justify-center gap-2 font-medium"
-        onClick={onAddTask}
-      >
-        <span className="w-4 h-4">+</span>
-        <span>Agregar Tarea</span>
-      </button>
+
+      {title === 'Por Hacer' && (
+        <button
+          className="mt-4 w-full py-2 border-2 border-dashed border-slate-300 rounded-lg text-slate-500 hover:border-[#007BFF] hover:text-[#007BFF] transition-colors flex items-center justify-center gap-2 font-medium"
+          onClick={onAddTask}
+        >
+          <span className="w-4 h-4">+</span>
+          <span>Agregar Tarea</span>
+        </button>
+      )}
     </div>
   );
 }
