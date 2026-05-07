@@ -86,10 +86,11 @@ export function TaskStatusModal({ task, isOpen, onClose, onSave, onLogTime }) {
   const isOverBudget = safeEstimatedHours > 0 ? totalHoursLogged > safeEstimatedHours : false;
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent 
         className="sm:max-w-[800px] max-h-[90vh] overflow-hidden flex flex-col"
         onKeyDown={handleKeyDown}
+        onClick={(e) => e.stopPropagation()}
       >
         <DialogHeader>
           <DialogTitle className="text-2xl font-semibold">Detalles de la Tarea</DialogTitle>
@@ -335,11 +336,20 @@ export function TaskStatusModal({ task, isOpen, onClose, onSave, onLogTime }) {
         </Tabs>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
+          <Button
+            variant="outline"
+            onClick={(e) => {
+              e.stopPropagation();
+              onClose();
+            }}
+          >
             Cerrar
           </Button>
           <Button
-            onClick={handleSave}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleSave();
+            }}
             disabled={!hasChanges}
             className="gap-2"
           >

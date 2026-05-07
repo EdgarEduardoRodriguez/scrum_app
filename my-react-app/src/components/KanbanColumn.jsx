@@ -1,11 +1,27 @@
 import TaskCard from './TaskCard';
 
-function KanbanColumn({ title, tasks, count, onAddTask }) {
+function KanbanColumn({ title, tasks, count, onAddTask, onSaveTaskStatus, onLogTaskTime, columnStatus, onDropTaskToStatus }) {
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    const taskId = e.dataTransfer.getData("text/task-id");
+    if (!taskId || !columnStatus || !onDropTaskToStatus) return;
+    onDropTaskToStatus(taskId, columnStatus);
+  };
+
   return (
-    <div className="bg-slate-100 rounded-lg p-4 flex flex-col min-w-[320px]">
+    <div
+      className="bg-card rounded-lg p-4 flex flex-col min-w-[320px] border border-border shadow-sm"
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
       <div className="flex items-center justify-between mb-4">
-        <h3 className="font-semibold text-slate-700">{title}</h3>
-        <span className="bg-slate-200 text-slate-600 text-xs font-medium px-2 py-1 rounded-full">
+        <h3 className="font-semibold text-foreground">{title}</h3>
+        <span className="bg-muted text-muted-foreground text-xs font-medium px-2 py-1 rounded-full">
           {count}
         </span>
       </div>
@@ -19,13 +35,15 @@ function KanbanColumn({ title, tasks, count, onAddTask }) {
             priority={task.priority}
             assignedTo={task.assignedTo || task.assignee || "Sin asignar"}
             avatarColor={task.avatarColor}
+            onSaveTaskStatus={onSaveTaskStatus}
+            onLogTaskTime={onLogTaskTime}
           />
         ))}
       </div>
 
       {title === 'Por Hacer' && (
         <button
-          className="mt-4 w-full py-2 border-2 border-dashed border-slate-300 rounded-lg text-slate-500 hover:border-[#007BFF] hover:text-[#007BFF] transition-colors flex items-center justify-center gap-2 font-medium"
+          className="mt-4 w-full py-2 border-2 border-dashed border-border rounded-lg text-muted-foreground hover:border-foreground hover:text-foreground transition-colors flex items-center justify-center gap-2 font-medium"
           onClick={onAddTask}
         >
           <span className="w-4 h-4">+</span>

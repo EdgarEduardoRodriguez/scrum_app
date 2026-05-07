@@ -8,7 +8,7 @@ const priorityStyles = {
   Baja: "bg-green-100 text-green-700 border-green-200",
 };
 
-function TaskCard({ task, title, priority, assignedTo, avatarColor }) {
+function TaskCard({ task, title, priority, assignedTo, avatarColor, onSaveTaskStatus, onLogTaskTime }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const initials = assignedTo
     .split(" ")
@@ -18,22 +18,28 @@ function TaskCard({ task, title, priority, assignedTo, avatarColor }) {
     .slice(0, 2);
 
   const handleSaveTaskStatus = (taskId, newStatus) => {
-    // Aquí deberías implementar la lógica para guardar el nuevo estado de la tarea
-    // Por ahora, solo lo mostraremos en consola
-    console.log(`Task ${taskId} status updated to: ${newStatus}`);
-    // Puedes añadir una llamada a una API o a un gestor de estado aquí
+    if (onSaveTaskStatus) {
+      onSaveTaskStatus(taskId, newStatus);
+    }
   };
 
   const handleLogTime = (taskId, hours, note) => {
-    // Aquí deberías implementar la lógica para registrar el tiempo
-    console.log(`Logged ${hours} hours for task ${taskId}. Note: ${note || "No note"}`);
-    // Puedes añadir una llamada a una API o a un gestor de estado aquí
+    if (onLogTaskTime) {
+      onLogTaskTime(taskId, hours, note);
+    }
+  };
+
+  const handleDragStart = (e) => {
+    e.dataTransfer.setData("text/task-id", task.id);
+    e.dataTransfer.effectAllowed = "move";
   };
 
   return (
     <div
       className="bg-white p-4 rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-pointer border border-slate-200"
       onClick={() => setIsModalOpen(true)}
+      draggable
+      onDragStart={handleDragStart}
     >
       <h4 className="text-sm font-medium text-slate-800 mb-3">{title}</h4>
       
