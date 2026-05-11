@@ -11,14 +11,16 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
+from .models import Project, ProjectInvitation, ProjectMember, Task, TimeEntry
 
-from .models import Project, ProjectInvitation, ProjectMember
 from .serializers import (
     AddMemberSerializer,
     MeSerializer,
     ProjectInvitationSerializer,
     ProjectSerializer,
     RegisterSerializer,
+    TaskSerializer,
+    TimeEntrySerializer,
 )
 
 logger = logging.getLogger(__name__)
@@ -244,6 +246,62 @@ def search_users_for_project(request, pk):
 
     return Response(MeSerializer(users, many=True).data)
 
+@api_view(["GET", "POST"])
+@permission_classes([permissions.IsAuthenticated])
+def task_list_create(request, project_pk):
+    try:
+        project = Project.objects.get(pk=project_pk, members__user=request.user)
+    except Project.DoesNotExist:
+        return Response({"detail": "Proyecto no encontrado"}, status=status.HTTP_404_NOT_FOUND)
+
+    if request.method == "GET":
+        tasks = Task.objects.filter(project=project)
+        serializer = TaskSerializer(tasks, many=True)
+        return Response(serializer.data)
+
+    elif request.method == "POST":
+        serializer = TaskSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(project=project)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(["GET", "PATCH"])
+@permission_classes([permissions.IsAuthenticated])
+def task_detail(request, project_pk, task_pk):
+    try:
+        project = Project.objects.get(pk=project_pk, members__user=request.user)
+        task = Task.objects.get(pk=task_pk, project=project)
+    except (Project.DoesNotExist, Task.DoesNotExist):
+        return Response({"detail": "Tarea no encontrada"}, status=status.HTTP_404_NOT_FOUND)
+
+    if request.method == "GET":
+        serializer = TaskSerializer(task)
+        return Response(serializer.data)
+
+    elif request.method == "PATCH":
+        serializer = TaskSerializer(task, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(["POST"])
+@permission_classes([permissions.IsAuthenticated])
+def task_log_time(request, project_pk, task_pk):
+    try:
+        project = Project.objects.get(pk=project_pk, members__user=request.user)
+        task = Task.objects.get(pk=task_pk, project=project)
+    except (Project.DoesNotExist, Task.DoesNotExist):
+        return Response({"detail": "Tarea no encontrada"}, status=status.HTTP_404_NOT_FOUND)
+
+    serializer = TimeEntrySerializer(data=request.data)
+    if serializer.is_valid():
+        serializer.save(task=task)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(["GET"])
 @permission_classes([permissions.IsAuthenticated])

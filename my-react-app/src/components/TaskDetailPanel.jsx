@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { User, Calendar, Clock, X, Save } from "lucide-react";
+import { Calendar, Clock, X, Save } from "lucide-react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -28,7 +28,7 @@ function formatDate(date) {
   });
 }
 
-export default function TaskDetailPanel({ task, onClose, onUpdateTask }) {
+export default function TaskDetailPanel({ task, onClose, onUpdateTask, projectMembers = [] }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [assignee, setAssignee] = useState("");
@@ -112,14 +112,17 @@ export default function TaskDetailPanel({ task, onClose, onUpdateTask }) {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label className="text-xs font-medium text-muted-foreground">Responsable</Label>
-              <div className="flex items-center gap-2">
-                <User className="w-4 h-4 text-muted-foreground shrink-0" />
-                <Input
-                  value={assignee}
-                  onChange={(e) => setAssignee(e.target.value)}
-                  className="text-sm"
-                />
-              </div>
+              <Select value={assignee} onValueChange={setAssignee}>
+                <SelectTrigger className="text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Sin asignar">Sin asignar</SelectItem>
+                  {projectMembers.map((m) => (
+                    <SelectItem key={m.id} value={m.name}>{m.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2">

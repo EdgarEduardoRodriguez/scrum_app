@@ -1,7 +1,7 @@
 from django.contrib.auth.models import User
 from rest_framework import serializers
 
-from .models import Project, ProjectInvitation, ProjectMember
+from .models import Project, ProjectInvitation, ProjectMember, Task, TimeEntry
 
 
 # Serializer para miembros de proyecto
@@ -24,7 +24,6 @@ class ProjectSerializer(serializers.ModelSerializer):
     """Serializer para el modelo Project."""
 
     members = ProjectMemberSerializer(many=True, read_only=True)
-    # Rol del usuario actual en este proyecto
     my_role = serializers.SerializerMethodField()
 
     class Meta:
@@ -43,7 +42,6 @@ class ProjectSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "created_at", "sprint_count", "tasks_total", "tasks_completed"]
 
-    # Campos calculados (no se guardan en BD, se calculan al vuelo)
     sprint_count = serializers.SerializerMethodField()
     tasks_total = serializers.SerializerMethodField()
     tasks_completed = serializers.SerializerMethodField()
@@ -58,7 +56,6 @@ class ProjectSerializer(serializers.ModelSerializer):
         return getattr(obj, "_tasks_completed", 0)
 
     def get_my_role(self, obj):
-        """Retorna el rol del usuario actual en el proyecto."""
         request = self.context.get("request")
         if request and request.user.is_authenticated:
             membership = obj.members.filter(user=request.user).first()
@@ -67,9 +64,7 @@ class ProjectSerializer(serializers.ModelSerializer):
         return None
 
     def create(self, validated_data):
-        # Crear el proyecto
         project = Project.objects.create(**validated_data)
-        # Agregar al creador como Scrum Master
         ProjectMember.objects.create(
             project=project,
             user=self.context["request"].user,
@@ -114,13 +109,29 @@ class ProjectInvitationSerializer(serializers.ModelSerializer):
         return name or obj.invited_by.username
 
 
+class TimeEntrySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TimeEntry
+        fields = ["id", "task", "hours", "logged_by", "note", "date"]
+        read_only_fields = ["id", "task", "date"]
+
+
+class TaskSerializer(serializers.ModelSerializer):
+    time_entries = TimeEntrySerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Task
+        fields = [
+            "id", "project", "title", "description", "status",
+            "priority", "assignee", "avatar_color", "estimated_hours",
+            "time_entries", "created_at", "updated_at",
+        ]
+        read_only_fields = ["id", "project", "time_entries", "created_at", "updated_at"]
+
+
 # Serializer para validar y crear usuarios desde el endpoint de registro.
 class RegisterSerializer(serializers.Serializer):
-    """Serializer para registrar usuarios.
-
-    En el frontend tú pides: nombre, correo, contraseña.
-    Django necesita un `username`, así que por ahora usaremos el correo como username.
-    """
+    """Serializer para registrar usuarios."""
 
     name = serializers.CharField(max_length=150)
     last_name = serializers.CharField(max_length=150)
@@ -128,13 +139,11 @@ class RegisterSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True, min_length=4)
 
     def validate_email(self, value):
-        # Evitamos duplicados revisando tanto username como email.
         if User.objects.filter(username=value).exists() or User.objects.filter(email=value).exists():
             raise serializers.ValidationError("Ya existe un usuario con ese correo")
         return value
 
     def create(self, validated_data):
-        # Usamos email como username (simple, para no complicar el registro todavía)
         user = User.objects.create_user(
             username=validated_data["email"],
             email=validated_data["email"],

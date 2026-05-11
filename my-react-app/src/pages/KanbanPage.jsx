@@ -1,105 +1,103 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { User, ChevronDown } from "lucide-react";
 import KanbanBoard from "../components/KanbanBoard";
 import KanbanColumn from "../components/KanbanColumn";
 import AddTaskModal from "../components/AddTaskModal";
 import TaskDetailPanel from "../components/TaskDetailPanel";
 import { TaskStatus } from "../types/task";
+import { apiFetch } from "../utils/api";
+import { useProject } from "../context/ProjectContext";
 
-const mockTasksData = [
-  {
-    id: "1",
-    title: "Diseñar interfaz de usuario para el inicio de sesión",
-    description: "Crear una interfaz moderna y responsiva para el formulario de login",
-    status: TaskStatus.TODO,
-    priority: "Alta",
-    assignee: "Juan Pérez",
-    avatarColor: "#3B82F6",
-    createdAt: new Date("2023-01-01T10:00:00Z"),
-    statusHistory: [
-      { status: TaskStatus.TODO, changedAt: new Date("2023-01-01T10:00:00Z"), changedBy: "System" },
-    ],
-    estimatedHours: 8,
-    timeEntries: [],
-  },
-  {
-    id: "2",
-    title: "Implementar la autenticación de usuarios",
-    description: "Desarrollar el sistema de login y registro con JWT",
-    status: TaskStatus.IN_PROGRESS,
-    priority: "Alta",
-    assignee: "María García",
-    avatarColor: "#10B981",
-    createdAt: new Date("2023-01-05T11:00:00Z"),
-    statusHistory: [
-      { status: TaskStatus.TODO, changedAt: new Date("2023-01-05T11:00:00Z"), changedBy: "System" },
-      { status: TaskStatus.IN_PROGRESS, changedAt: new Date("2023-01-06T09:00:00Z"), changedBy: "Juan Pérez" },
-    ],
-    estimatedHours: 16,
-    timeEntries: [{ date: new Date("2023-01-06T14:00:00Z"), hours: 4, loggedBy: "María García", note: "Initial setup" }],
-  },
-  {
-    id: "3",
-    title: "Crear base de datos para productos",
-    description: "Diseñar e implementar el esquema de base de datos para el catálogo de productos",
-    status: TaskStatus.DONE,
-    priority: "Media",
-    assignee: "Carlos Ruíz",
-    avatarColor: "#F59E0B",
-    createdAt: new Date("2023-01-10T14:00:00Z"),
-    statusHistory: [
-      { status: TaskStatus.TODO, changedAt: new Date("2023-01-10T14:00:00Z"), changedBy: "System" },
-      { status: TaskStatus.IN_PROGRESS, changedAt: new Date("2023-01-11T10:00:00Z"), changedBy: "Carlos Ruíz" },
-      { status: TaskStatus.DONE, changedAt: new Date("2023-01-13T16:00:00Z"), changedBy: "Carlos Ruíz" },
-    ],
-    estimatedHours: 12,
-    timeEntries: [
-      { date: new Date("2023-01-11T15:00:00Z"), hours: 5, loggedBy: "Carlos Ruíz", note: "Table schemas" },
-      { date: new Date("2023-01-12T09:00:00Z"), hours: 7, loggedBy: "Carlos Ruíz", note: "Initial data population" },
-    ],
-  },
-  {
-    id: "4",
-    title: "Desarrollar API para la gestión de pedidos",
-    description: "Crear endpoints RESTful para crear, leer, actualizar y eliminar pedidos",
-    status: TaskStatus.TODO,
-    priority: "Alta",
-    assignee: "Ana López",
-    avatarColor: "#EF4444",
-    createdAt: new Date("2023-01-15T09:00:00Z"),
-    statusHistory: [
-      { status: TaskStatus.TODO, changedAt: new Date("2023-01-15T09:00:00Z"), changedBy: "System" },
-    ],
-    estimatedHours: 20,
-    timeEntries: [],
-  },
-  {
-    id: "5",
-    title: "Optimizar el rendimiento de la aplicación",
-    description: "Mejorar los tiempos de carga y reducir el consumo de recursos",
-    status: TaskStatus.TODO,
-    priority: "Baja",
-    assignee: "Pedro Hernández",
-    avatarColor: "#8B5CF6",
-    createdAt: new Date("2023-01-20T13:00:00Z"),
-    statusHistory: [
-      { status: TaskStatus.TODO, changedAt: new Date("2023-01-20T13:00:00Z"), changedBy: "System" },
-    ],
-    estimatedHours: 10,
-    timeEntries: [],
-  },
-];
+const mapBackendTask = (t) => ({
+  id: String(t.id),
+  title: t.title,
+  description: t.description || "",
+  status: t.status,
+  priority: t.priority || "Media",
+  assignee: t.assignee || "Sin asignar",
+  avatarColor: t.avatar_color || "#3B82F6",
+  createdAt: new Date(t.created_at),
+  estimatedHours: t.estimated_hours || 4,
+  statusHistory: [],
+  timeEntries: (t.time_entries || []).map((e) => ({
+    date: new Date(e.date),
+    hours: e.hours,
+    loggedBy: e.logged_by,
+    note: e.note || null,
+  })),
+});
 
 function KanbanPage() {
-  const [tasks, setTasks] = useState(mockTasksData);
+  const { activeProject } = useProject();
+  const [tasks, setTasks] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [backlogTitle, setBacklogTitle] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState(null);
+  const [projectMembers, setProjectMembers] = useState([]);
 
   const selectedTask = tasks.find((t) => t.id === selectedTaskId);
 
   const backlogTasks = useMemo(() => tasks, [tasks]);
+
+  useEffect(() => {
+    if (!activeProject) {
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadTasks() {
+      try {
+        setLoading(true);
+        const res = await apiFetch(`/api/auth/projects/${activeProject.id}/tasks/`);
+        if (cancelled) return;
+        if (res.ok) {
+          const data = await res.json();
+          setTasks(data.map(mapBackendTask));
+        }
+      } catch (err) {
+        console.error("Error loading tasks:", err);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    loadTasks();
+    return () => { cancelled = true; };
+  }, [activeProject]);
+
+  useEffect(() => {
+    if (!activeProject) {
+      setProjectMembers([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadMembers() {
+      try {
+        const res = await apiFetch(`/api/auth/projects/${activeProject.id}/`);
+        if (cancelled) return;
+        if (res.ok) {
+          const data = await res.json();
+          const members = (data.members || []).map((m) => ({
+            id: m.user_id,
+            name: `${m.first_name} ${m.last_name}`.trim() || m.username,
+            username: m.username,
+          }));
+          if (!cancelled) setProjectMembers(members);
+        }
+      } catch (err) {
+        console.error("Error loading members:", err);
+      }
+    }
+
+    loadMembers();
+    return () => { cancelled = true; };
+  }, [activeProject]);
 
   const statusLabelStyles = {
     [TaskStatus.TODO]: "bg-slate-100 text-slate-700",
@@ -125,7 +123,15 @@ function KanbanPage() {
     Baja: "bg-emerald-50 border-emerald-200 text-emerald-700",
   };
 
-  const handleSaveTaskStatus = (taskId, newStatus) => {
+  const handleSaveTaskStatus = async (taskId, newStatus) => {
+    const prevId = taskId.startsWith("local-") ? null : taskId;
+    if (prevId && activeProject) {
+      await apiFetch(`/api/auth/projects/${activeProject.id}/tasks/${prevId}/`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: newStatus }),
+      }).catch(() => {});
+    }
+
     setTasks((prevTasks) =>
       prevTasks.map((task) => {
         if (task.id !== taskId || task.status === newStatus) {
@@ -148,7 +154,19 @@ function KanbanPage() {
     );
   };
 
-  const handleLogTaskTime = (taskId, hours, note) => {
+  const handleLogTaskTime = async (taskId, hours, note) => {
+    const prevId = taskId.startsWith("local-") ? null : taskId;
+    if (prevId && activeProject) {
+      try {
+        await apiFetch(`/api/auth/projects/${activeProject.id}/tasks/${prevId}/log-time/`, {
+          method: "POST",
+          body: JSON.stringify({ hours, note: note || null, logged_by: "Usuario" }),
+        });
+      } catch (e) {
+        console.error("Error logging time:", e);
+      }
+    }
+
     setTasks((prevTasks) =>
       prevTasks.map((task) => {
         if (task.id !== taskId) {
@@ -196,48 +214,98 @@ function KanbanPage() {
     setIsAddModalOpen(false);
   };
 
-  const handleAddBacklogTask = (e) => {
+  const handleAddBacklogTask = async (e) => {
     e.preventDefault();
     const title = backlogTitle.trim();
     if (!title) return;
 
     const palette = ["#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#06B6D4"];
+
     const newTask = {
-      id: `task-${tasks.length + 1}-${Date.now()}`,
       title,
       description: "Tarea agregada desde Product Backlog",
       status: TaskStatus.TODO,
       priority: "Media",
       assignee: "Sin asignar",
-      avatarColor: palette[Math.floor(Math.random() * palette.length)],
-      createdAt: new Date(),
-      statusHistory: [{ status: TaskStatus.TODO, changedAt: new Date(), changedBy: "Usuario" }],
-      estimatedHours: 4,
-      timeEntries: [],
+      avatar_color: palette[Math.floor(Math.random() * palette.length)],
+      estimated_hours: 4,
     };
 
-    setTasks((prevTasks) => [...prevTasks, newTask]);
+    if (activeProject) {
+      try {
+        const res = await apiFetch(`/api/auth/projects/${activeProject.id}/tasks/`, {
+          method: "POST",
+          body: JSON.stringify(newTask),
+        });
+        if (res.ok) {
+          const created = await res.json();
+          setTasks((prevTasks) => [...prevTasks, mapBackendTask(created)]);
+        }
+      } catch (err) {
+        console.error("Error creating task:", err);
+      }
+    } else {
+      const localTask = {
+        id: `local-${Date.now()}`,
+        ...newTask,
+        avatarColor: newTask.avatar_color,
+        estimatedHours: newTask.estimated_hours,
+        createdAt: new Date(),
+        statusHistory: [{ status: TaskStatus.TODO, changedAt: new Date(), changedBy: "Usuario" }],
+        timeEntries: [],
+      };
+      setTasks((prevTasks) => [...prevTasks, localTask]);
+    }
     setBacklogTitle("");
     setIsCreating(false);
   };
 
-  const handleBacklogAssigneeChange = (taskId, assigneeValue) => {
+  const handleBacklogAssigneeChange = async (taskId, assigneeValue) => {
+    const prevId = taskId.startsWith("local-") ? null : taskId;
+    const newAssignee = assigneeValue.trim() === "" ? "Sin asignar" : assigneeValue;
+    if (prevId && activeProject) {
+      await apiFetch(`/api/auth/projects/${activeProject.id}/tasks/${prevId}/`, {
+        method: "PATCH",
+        body: JSON.stringify({ assignee: newAssignee }),
+      }).catch(() => {});
+    }
+
     setTasks((prevTasks) =>
       prevTasks.map((task) =>
-        task.id === taskId
-          ? { ...task, assignee: assigneeValue.trim() === "" ? "Sin asignar" : assigneeValue }
-          : task
+        task.id === taskId ? { ...task, assignee: newAssignee } : task
       )
     );
   };
 
-  const handleBacklogPriorityChange = (taskId, priorityValue) => {
+  const handleBacklogPriorityChange = async (taskId, priorityValue) => {
+    const prevId = taskId.startsWith("local-") ? null : taskId;
+    if (prevId && activeProject) {
+      await apiFetch(`/api/auth/projects/${activeProject.id}/tasks/${prevId}/`, {
+        method: "PATCH",
+        body: JSON.stringify({ priority: priorityValue }),
+      }).catch(() => {});
+    }
+
     setTasks((prevTasks) =>
       prevTasks.map((task) => (task.id === taskId ? { ...task, priority: priorityValue } : task))
     );
   };
 
-  const handleUpdateTask = (taskId, updates) => {
+  const handleUpdateTask = async (taskId, updates) => {
+    const prevId = taskId.startsWith("local-") ? null : taskId;
+    if (prevId && activeProject) {
+      const backendUpdates = {};
+      if (updates.title !== undefined) backendUpdates.title = updates.title;
+      if (updates.description !== undefined) backendUpdates.description = updates.description;
+      if (updates.assignee !== undefined) backendUpdates.assignee = updates.assignee;
+      if (updates.priority !== undefined) backendUpdates.priority = updates.priority;
+      if (updates.estimatedHours !== undefined) backendUpdates.estimated_hours = updates.estimatedHours;
+      await apiFetch(`/api/auth/projects/${activeProject.id}/tasks/${prevId}/`, {
+        method: "PATCH",
+        body: JSON.stringify(backendUpdates),
+      }).catch(() => {});
+    }
+
     setTasks((prevTasks) =>
       prevTasks.map((task) => (task.id === taskId ? { ...task, ...updates } : task))
     );
@@ -283,7 +351,11 @@ function KanbanPage() {
           </div>
 
           <div className="space-y-2">
-            {backlogTasks.length === 0 ? (
+            {loading ? (
+              <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500">
+                Cargando tareas...
+              </div>
+            ) : backlogTasks.length === 0 ? (
               <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500">
                 No hay tareas en backlog todavía.
               </div>
@@ -303,12 +375,17 @@ function KanbanPage() {
                   </div>
                   <div className="md:col-span-2 flex items-center text-sm text-slate-700">
                     <div className="flex items-center gap-2 w-full">
-                      <User className="w-4 h-4 text-muted-foreground" />
-                      <input
-                        className="w-full bg-transparent px-0 py-1 text-xs md:text-sm focus:outline-none"
+                      <User className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <select
+                        className="w-full bg-transparent px-0 py-1 text-xs md:text-sm focus:outline-none cursor-pointer"
                         value={task.assignee || "Sin asignar"}
                         onChange={(e) => handleBacklogAssigneeChange(task.id, e.target.value)}
-                      />
+                      >
+                        <option value="Sin asignar">Sin asignar</option>
+                        {projectMembers.map((m) => (
+                          <option key={m.id} value={m.name}>{m.name}</option>
+                        ))}
+                      </select>
                     </div>
                   </div>
                   <div className="md:col-span-2 flex items-center">
@@ -391,6 +468,7 @@ function KanbanPage() {
         task={selectedTask}
         onClose={() => setSelectedTaskId(null)}
         onUpdateTask={handleUpdateTask}
+        projectMembers={projectMembers}
       />
     </div>
 

@@ -62,7 +62,6 @@ class ProjectMember(models.Model):
     class Meta:
         verbose_name = "Miembro de proyecto"
         verbose_name_plural = "Miembros de proyecto"
-        # Un usuario solo puede tener un rol por proyecto
         unique_together = ["project", "user"]
 
     def __str__(self):
@@ -119,3 +118,65 @@ class ProjectInvitation(models.Model):
 
     def __str__(self):
         return f"Invitacion {self.project.name} -> {self.invited_user.username} ({self.status})"
+
+
+class Task(models.Model):
+    STATUS_CHOICES = [
+        ("To Do", "To Do"),
+        ("In Progress", "In Progress"),
+        ("Done", "Done"),
+    ]
+    PRIORITY_CHOICES = [
+        ("Alta", "Alta"),
+        ("Media", "Media"),
+        ("Baja", "Baja"),
+    ]
+
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.CASCADE,
+        related_name="tasks",
+        verbose_name="Proyecto"
+    )
+    title = models.CharField(max_length=300, verbose_name="Título")
+    description = models.TextField(blank=True, verbose_name="Descripción")
+    status = models.CharField(
+        max_length=20, choices=STATUS_CHOICES, default="To Do", verbose_name="Estado"
+    )
+    priority = models.CharField(
+        max_length=10, choices=PRIORITY_CHOICES, default="Media", verbose_name="Prioridad"
+    )
+    assignee = models.CharField(max_length=150, blank=True, default="Sin asignar", verbose_name="Responsable")
+    avatar_color = models.CharField(max_length=7, default="#3B82F6", verbose_name="Color avatar")
+    estimated_hours = models.FloatField(default=4, verbose_name="Horas estimadas")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Fecha de creación")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Última actualización")
+
+    class Meta:
+        verbose_name = "Tarea"
+        verbose_name_plural = "Tareas"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return self.title
+
+
+class TimeEntry(models.Model):
+    task = models.ForeignKey(
+        Task,
+        on_delete=models.CASCADE,
+        related_name="time_entries",
+        verbose_name="Tarea"
+    )
+    hours = models.FloatField(verbose_name="Horas")
+    logged_by = models.CharField(max_length=150, default="Usuario", verbose_name="Registrado por")
+    note = models.TextField(blank=True, null=True, verbose_name="Nota")
+    date = models.DateTimeField(auto_now_add=True, verbose_name="Fecha")
+
+    class Meta:
+        verbose_name = "Registro de tiempo"
+        verbose_name_plural = "Registros de tiempo"
+        ordering = ["-date"]
+
+    def __str__(self):
+        return f"{self.hours}h - {self.task.title}"
