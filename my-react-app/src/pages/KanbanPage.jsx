@@ -3,6 +3,7 @@ import { User, ChevronDown } from "lucide-react";
 import KanbanBoard from "../components/KanbanBoard";
 import KanbanColumn from "../components/KanbanColumn";
 import AddTaskModal from "../components/AddTaskModal";
+import TaskDetailPanel from "../components/TaskDetailPanel";
 import { TaskStatus } from "../types/task";
 
 const mockTasksData = [
@@ -93,6 +94,10 @@ function KanbanPage() {
   const [tasks, setTasks] = useState(mockTasksData);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [backlogTitle, setBacklogTitle] = useState("");
+  const [isCreating, setIsCreating] = useState(false);
+  const [selectedTaskId, setSelectedTaskId] = useState(null);
+
+  const selectedTask = tasks.find((t) => t.id === selectedTaskId);
 
   const backlogTasks = useMemo(() => tasks, [tasks]);
 
@@ -211,8 +216,9 @@ function KanbanPage() {
       timeEntries: [],
     };
 
-    setTasks((prevTasks) => [newTask, ...prevTasks]);
+    setTasks((prevTasks) => [...prevTasks, newTask]);
     setBacklogTitle("");
+    setIsCreating(false);
   };
 
   const handleBacklogAssigneeChange = (taskId, assigneeValue) => {
@@ -231,6 +237,12 @@ function KanbanPage() {
     );
   };
 
+  const handleUpdateTask = (taskId, updates) => {
+    setTasks((prevTasks) =>
+      prevTasks.map((task) => (task.id === taskId ? { ...task, ...updates } : task))
+    );
+  };
+
   const todoTasks = tasks.filter((task) => task.status === TaskStatus.TODO);
   const inProgressTasks = tasks.filter((task) => task.status === TaskStatus.IN_PROGRESS);
   const doneTasks = tasks.filter((task) => task.status === TaskStatus.DONE);
@@ -239,8 +251,9 @@ function KanbanPage() {
     <div className="p-6">
       <h1 className="text-3xl font-bold text-slate-800 mb-6">Tareas del Proyecto</h1>
 
-      <section className="mb-6 ml-4 w-full max-w-[1050px] min-h-[420px] rounded-lg border border-border bg-card shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-border bg-card">
+      <div className="flex gap-4 mb-6">
+        <section className="flex-1 ml-4 min-h-[420px] rounded-lg border border-border bg-card shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-border bg-card">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div className="flex items-start gap-3">
               <div className="mt-1 h-10 w-1.5 rounded-full bg-slate-900" />
@@ -261,28 +274,6 @@ function KanbanPage() {
           </div>
         </div>
 
-        <div className="p-5 border-b border-border bg-card">
-          <form onSubmit={handleAddBacklogTask} className="flex gap-3 items-end">
-            <div className="flex-1">
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">Título de la tarea</label>
-              <input
-                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
-                placeholder="Ej. Diseñar dashboard de métricas"
-                value={backlogTitle}
-                onChange={(e) => setBacklogTitle(e.target.value)}
-              />
-            </div>
-            <div className="flex items-end">
-              <button
-                type="submit"
-                className="w-full h-10 min-w-[170px] whitespace-nowrap rounded-lg bg-slate-900 px-4 text-sm font-medium text-white hover:bg-black transition-colors"
-              >
-                + Agregar al Backlog
-              </button>
-            </div>
-          </form>
-        </div>
-
         <div className="p-4">
           <div className="hidden md:grid grid-cols-12 gap-3 px-3 pb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
             <div className="col-span-6">Tarea</div>
@@ -300,7 +291,12 @@ function KanbanPage() {
               backlogTasks.map((task) => (
                 <div
                   key={`backlog-${task.id}`}
-                  className="grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-3 rounded-xl border border-slate-200 bg-white px-3 py-3 hover:shadow-sm transition-shadow"
+                  className={`grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-3 rounded-xl border px-3 py-3 transition-shadow cursor-pointer ${
+                    selectedTaskId === task.id
+                      ? "border-slate-400 bg-slate-50 shadow-sm"
+                      : "border-slate-200 bg-white hover:shadow-sm"
+                  }`}
+                  onClick={() => setSelectedTaskId(task.id)}
                 >
                   <div className="md:col-span-6">
                     <p className="text-sm font-semibold text-slate-800">{task.title}</p>
@@ -352,10 +348,53 @@ function KanbanPage() {
               ))
             )}
           </div>
+
+          <div className="mt-4">
+            {isCreating ? (
+              <form onSubmit={handleAddBacklogTask} className="flex gap-3 items-end">
+                <div className="flex-1">
+                  <label className="mb-1 block text-xs font-medium text-muted-foreground">Título de la tarea</label>
+                  <input
+                    className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
+                    placeholder="Ej. Diseñar dashboard de métricas"
+                    value={backlogTitle}
+                    onChange={(e) => setBacklogTitle(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") {
+                        setBacklogTitle("");
+                        setIsCreating(false);
+                      }
+                    }}
+                    onBlur={() => {
+                      if (!backlogTitle.trim()) {
+                        setIsCreating(false);
+                      }
+                    }}
+                    autoFocus
+                  />
+                </div>
+              </form>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setIsCreating(true)}
+                className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-black transition-colors"
+              >
+                + Crear
+              </button>
+            )}
+          </div>
         </div>
       </section>
 
-      <KanbanBoard>
+      <TaskDetailPanel
+        task={selectedTask}
+        onClose={() => setSelectedTaskId(null)}
+        onUpdateTask={handleUpdateTask}
+      />
+    </div>
+
+    <KanbanBoard>
         <KanbanColumn
           title="Por Hacer"
           tasks={todoTasks}
