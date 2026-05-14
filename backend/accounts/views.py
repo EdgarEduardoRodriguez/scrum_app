@@ -267,7 +267,7 @@ def task_list_create(request, project_pk):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-@api_view(["GET", "PATCH"])
+@api_view(["GET", "PATCH", "DELETE"])
 @permission_classes([permissions.IsAuthenticated])
 def task_detail(request, project_pk, task_pk):
     try:
@@ -286,6 +286,10 @@ def task_detail(request, project_pk, task_pk):
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    elif request.method == "DELETE":
+        task.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 @api_view(["POST"])

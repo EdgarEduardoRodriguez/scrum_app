@@ -318,6 +318,18 @@ function KanbanPage() {
     );
   };
 
+  const handleDeleteTask = async (taskId) => {
+    const prevId = taskId.startsWith("local-") ? null : taskId;
+    if (prevId && activeProject) {
+      await apiFetch(`/api/auth/projects/${activeProject.id}/tasks/${prevId}/`, {
+        method: "DELETE",
+      }).catch(() => {});
+    }
+
+    setTasks((prevTasks) => prevTasks.filter((task) => task.id !== taskId));
+    setSelectedTaskId(null);
+  };
+
   const todoTasks = tasks.filter((task) => task.status === TaskStatus.TODO);
   const inProgressTasks = tasks.filter((task) => task.status === TaskStatus.IN_PROGRESS);
   const doneTasks = tasks.filter((task) => task.status === TaskStatus.DONE);
@@ -475,6 +487,7 @@ function KanbanPage() {
         task={selectedTask}
         onClose={() => setSelectedTaskId(null)}
         onUpdateTask={handleUpdateTask}
+        onDeleteTask={handleDeleteTask}
         projectMembers={projectMembers}
       />
     </div>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { User, Calendar, Clock, X, Save } from "lucide-react";
+import { User, Calendar, Clock, Trash2, X, Save } from "lucide-react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -28,7 +28,7 @@ function formatDate(date) {
   });
 }
 
-export default function TaskDetailPanel({ task, onClose, onUpdateTask, projectMembers = [] }) {
+export default function TaskDetailPanel({ task, onClose, onUpdateTask, onDeleteTask, projectMembers = [] }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [assignee, setAssignee] = useState("");
@@ -84,6 +84,17 @@ export default function TaskDetailPanel({ task, onClose, onUpdateTask, projectMe
             <Button size="sm" variant="ghost" onClick={handleSave} className="h-8 px-2 gap-1 text-xs">
               <Save className="w-3.5 h-3.5" />
               Guardar
+            </Button>
+          )}
+          {task && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => onDeleteTask(task.id)}
+              className="h-8 px-2 gap-1 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Eliminar
             </Button>
           )}
           <Button size="sm" variant="ghost" onClick={onClose} className="h-8 w-8 p-0">
