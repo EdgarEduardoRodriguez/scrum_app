@@ -33,7 +33,7 @@ function KanbanColumn({ title, tasks, count, onAddTask, onSaveTaskStatus, onLogT
             task={task}
             title={task.title}
             priority={task.priority}
-            assignedTo={task.assignedTo || task.assignee || "Sin asignar"}
+            assignedTo={task.assignedTo || task.assigneeName || task.assignee || "Sin asignar"}
             avatarColor={task.avatarColor}
             onSaveTaskStatus={onSaveTaskStatus}
             onLogTaskTime={onLogTaskTime}

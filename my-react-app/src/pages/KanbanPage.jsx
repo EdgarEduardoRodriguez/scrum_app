@@ -14,7 +14,8 @@ const mapBackendTask = (t) => ({
   description: t.description || "",
   status: t.status,
   priority: t.priority || "Media",
-  assignee: t.assignee || "Sin asignar",
+  assignee: t.assignee,
+  assigneeName: t.assignee_name || "Sin asignar",
   avatarColor: t.avatar_color || "#3B82F6",
   createdAt: new Date(t.created_at),
   estimatedHours: t.estimated_hours || 4,
@@ -26,6 +27,12 @@ const mapBackendTask = (t) => ({
     note: e.note || null,
   })),
 });
+
+const getMemberName = (id, members) => {
+  if (!id) return "Sin asignar";
+  const m = members.find((m) => m.id === Number(id));
+  return m ? m.name : "Sin asignar";
+};
 
 function KanbanPage() {
   const { activeProject } = useProject();
@@ -226,7 +233,7 @@ function KanbanPage() {
       description: "Tarea agregada desde Product Backlog",
       status: TaskStatus.TODO,
       priority: "Media",
-      assignee: "Sin asignar",
+      assignee: null,
       avatar_color: palette[Math.floor(Math.random() * palette.length)],
       estimated_hours: 4,
     };
@@ -262,7 +269,7 @@ function KanbanPage() {
 
   const handleBacklogAssigneeChange = async (taskId, assigneeValue) => {
     const prevId = taskId.startsWith("local-") ? null : taskId;
-    const newAssignee = assigneeValue.trim() === "" ? "Sin asignar" : assigneeValue;
+    const newAssignee = assigneeValue ? Number(assigneeValue) : null;
     if (prevId && activeProject) {
       await apiFetch(`/api/auth/projects/${activeProject.id}/tasks/${prevId}/`, {
         method: "PATCH",
@@ -378,12 +385,12 @@ function KanbanPage() {
                       <User className="w-4 h-4 text-muted-foreground shrink-0" />
                       <select
                         className="w-full bg-transparent px-0 py-1 text-xs md:text-sm focus:outline-none cursor-pointer"
-                        value={task.assignee || "Sin asignar"}
+                        value={task.assignee || ""}
                         onChange={(e) => handleBacklogAssigneeChange(task.id, e.target.value)}
                       >
-                        <option value="Sin asignar">Sin asignar</option>
+                        <option value="">Sin asignar</option>
                         {projectMembers.map((m) => (
-                          <option key={m.id} value={m.name}>{m.name}</option>
+                          <option key={m.id} value={m.id}>{m.name}</option>
                         ))}
                       </select>
                     </div>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Calendar, Clock, X, Save } from "lucide-react";
+import { User, Calendar, Clock, X, Save } from "lucide-react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -112,14 +112,19 @@ export default function TaskDetailPanel({ task, onClose, onUpdateTask, projectMe
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label className="text-xs font-medium text-muted-foreground">Responsable</Label>
-              <Select value={assignee} onValueChange={setAssignee}>
+              <Select value={assignee ? String(assignee) : "none"} onValueChange={(val) => setAssignee(val === "none" ? null : Number(val))}>
                 <SelectTrigger className="text-sm">
-                  <SelectValue />
+                  <SelectValue placeholder="Sin asignar" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Sin asignar">Sin asignar</SelectItem>
+                  <SelectItem value="none">Sin asignar</SelectItem>
                   {projectMembers.map((m) => (
-                    <SelectItem key={m.id} value={m.name}>{m.name}</SelectItem>
+                    <SelectItem key={m.id} value={String(m.id)}>
+                      <div className="flex items-center gap-2">
+                        <User className="w-3.5 h-3.5 text-muted-foreground" />
+                        {m.name}
+                      </div>
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>

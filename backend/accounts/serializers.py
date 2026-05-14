@@ -118,15 +118,26 @@ class TimeEntrySerializer(serializers.ModelSerializer):
 
 class TaskSerializer(serializers.ModelSerializer):
     time_entries = TimeEntrySerializer(many=True, read_only=True)
+    assignee_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Task
         fields = [
             "id", "project", "title", "description", "status",
-            "priority", "assignee", "avatar_color", "estimated_hours",
+            "priority", "assignee", "assignee_name", "avatar_color", "estimated_hours",
             "time_entries", "created_at", "updated_at",
         ]
-        read_only_fields = ["id", "project", "time_entries", "created_at", "updated_at"]
+        read_only_fields = ["id", "project", "assignee_name", "time_entries", "created_at", "updated_at"]
+
+    def get_assignee_name(self, obj):
+        if obj.assignee is None:
+            return "Sin asignar"
+        try:
+            member = ProjectMember.objects.get(project=obj.project, user_id=obj.assignee)
+            name = f"{member.user.first_name} {member.user.last_name}".strip()
+            return name or member.user.username
+        except ProjectMember.DoesNotExist:
+            return "Sin asignar"
 
 
 # Serializer para validar y crear usuarios desde el endpoint de registro.

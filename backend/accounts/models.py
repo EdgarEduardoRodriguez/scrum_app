@@ -146,7 +146,7 @@ class Task(models.Model):
     priority = models.CharField(
         max_length=10, choices=PRIORITY_CHOICES, default="Media", verbose_name="Prioridad"
     )
-    assignee = models.CharField(max_length=150, blank=True, default="Sin asignar", verbose_name="Responsable")
+    assignee = models.IntegerField(blank=True, null=True, default=None, verbose_name="Responsable (ID)")
     avatar_color = models.CharField(max_length=7, default="#3B82F6", verbose_name="Color avatar")
     estimated_hours = models.FloatField(default=4, verbose_name="Horas estimadas")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Fecha de creación")

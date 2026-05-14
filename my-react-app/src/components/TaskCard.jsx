@@ -10,7 +10,7 @@ const priorityStyles = {
 
 function TaskCard({ task, title, priority, assignedTo, avatarColor, onSaveTaskStatus, onLogTaskTime }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const initials = assignedTo
+  const initials = String(assignedTo || "")
     .split(" ")
     .map(name => name[0])
     .join("")
