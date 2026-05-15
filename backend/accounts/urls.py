@@ -22,6 +22,7 @@ urlpatterns = [
     path("projects/", views.project_list_create, name="project_list_create"),
     path("projects/<int:pk>/", views.project_detail, name="project_detail"),
     path("projects/<int:pk>/members/", views.add_project_member, name="add_project_member"),
+    path("projects/<int:project_pk>/members/<int:member_id>/", views.update_project_member_role, name="update_project_member_role"),
     path("projects/<int:pk>/users/search/", views.search_users_for_project, name="search_users_for_project"),
     path("projects/<int:project_pk>/tasks/", views.task_list_create, name="task_list_create"),
     path("projects/<int:project_pk>/tasks/<int:task_pk>/", views.task_detail, name="task_detail"),

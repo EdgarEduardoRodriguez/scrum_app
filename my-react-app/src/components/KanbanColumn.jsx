@@ -1,12 +1,17 @@
 import TaskCard from './TaskCard';
 
-function KanbanColumn({ title, tasks, count, onAddTask, onSaveTaskStatus, onLogTaskTime, columnStatus, onDropTaskToStatus }) {
+function KanbanColumn({ title, tasks, count, onAddTask, onSaveTaskStatus, onLogTaskTime, columnStatus, onDropTaskToStatus, canCreateTask = true, canMoveTasks = true, canLogTime = true }) {
   const handleDragOver = (e) => {
+    if (!canMoveTasks) {
+      e.preventDefault();
+      return;
+    }
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
   };
 
   const handleDrop = (e) => {
+    if (!canMoveTasks) return;
     e.preventDefault();
     const taskId = e.dataTransfer.getData("text/task-id");
     if (!taskId || !columnStatus || !onDropTaskToStatus) return;
@@ -36,20 +41,22 @@ function KanbanColumn({ title, tasks, count, onAddTask, onSaveTaskStatus, onLogT
             assignedTo={task.assignedTo || task.assigneeName || task.assignee || "Sin asignar"}
             avatarColor={task.avatarColor}
             onSaveTaskStatus={onSaveTaskStatus}
-            onLogTaskTime={onLogTaskTime}
+            onLogTime={onLogTaskTime}
+            canChangeStatus={canMoveTasks}
+            canLogTime={canLogTime}
           />
         ))}
       </div>
 
-      {title === 'Por Hacer' && (
-        <button
-          className="mt-4 w-full py-2 border-2 border-dashed border-border rounded-lg text-muted-foreground hover:border-foreground hover:text-foreground transition-colors flex items-center justify-center gap-2 font-medium"
-          onClick={onAddTask}
-        >
-          <span className="w-4 h-4">+</span>
-          <span>Agregar Tarea</span>
-        </button>
-      )}
+       {title === 'Por Hacer' && canCreateTask && (
+         <button
+           className="mt-4 w-full py-2 border-2 border-dashed border-border rounded-lg text-muted-foreground hover:border-foreground hover:text-foreground transition-colors flex items-center justify-center gap-2 font-medium"
+           onClick={onAddTask}
+         >
+           <span className="w-4 h-4">+</span>
+           <span>Agregar Tarea</span>
+         </button>
+       )}
     </div>
   );
 }

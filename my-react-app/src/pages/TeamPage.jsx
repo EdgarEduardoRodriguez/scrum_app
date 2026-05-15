@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { UserPlus, ShieldCheck, ChevronDown, Check, Users } from "lucide-react";
 import { useProject } from "../context/ProjectContext";
 import { useAuth } from "../auth/AuthContext";
@@ -49,10 +49,18 @@ function saveMembers(projectId, members) {
 // ─── Selector de rol inline ───────────────────────────────────────────────
 function RoleSelector({ currentRole, memberId, onRoleChange }) {
   const [open, setOpen] = useState(false);
+  const btnRef = useRef(null);
+
+  const dropdownStyle = () => {
+    if (!btnRef.current) return {};
+    const r = btnRef.current.getBoundingClientRect();
+    return { position: "fixed", left: `${r.left}px`, top: `${r.bottom + 4}px`, minWidth: `${r.width}px` };
+  };
 
   return (
     <div className="relative">
       <button
+        ref={btnRef}
         onClick={() => setOpen((o) => !o)}
         className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-all hover:shadow-sm ${
           ROLE_STYLES[currentRole] || ROLE_STYLES.Observer
@@ -65,7 +73,10 @@ function RoleSelector({ currentRole, memberId, onRoleChange }) {
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 top-full mt-1 bg-card border border-border rounded-lg shadow-lg z-20 min-w-[160px] py-1">
+          <div
+            style={dropdownStyle()}
+            className="bg-card border border-border rounded-lg shadow-lg z-20 py-1"
+          >
             {ROLE_OPTIONS.map((role) => (
               <button
                 key={role}
@@ -130,11 +141,30 @@ export default function TeamPage() {
 
   const existingMemberIds = members.map((m) => m.user_id);
 
-  const handleRoleChange = (memberId, newRole) => {
-    setMembers((prev) => {
-      const updated = prev.map((m) => m.id === memberId ? { ...m, role: newRole } : m);
-      return updated;
-    });
+  const handleRoleChange = async (memberId, newRole) => {
+    if (!activeProject?.id) return;
+
+    try {
+      const res = await apiFetch(`/api/auth/projects/${activeProject.id}/members/${memberId}/`, {
+        method: "PATCH",
+        body: JSON.stringify({ role: newRole }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Error al actualizar rol");
+      }
+
+      // Actualización exitosa: actualizar estado local
+      setMembers((prev) =>
+        prev.map((m) => (m.id === memberId ? { ...m, role: newRole } : m))
+      );
+    } catch (err) {
+      console.error("Error actualizando rol:", err);
+      alert(err.message || "No se pudo actualizar el rol. Intenta de nuevo.");
+      // Opcional: recargar miembros desde el backend para revertir cambios
+      // loadMembersFromApi();
+    }
   };
 
   // Cuando se envía la invitación, agregar al miembro provisionalmente
@@ -157,7 +187,7 @@ export default function TeamPage() {
         {isScrumMaster && (
           <button
             onClick={() => setShowInviteModal(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-[#007BFF] hover:bg-[#0056b3] text-white rounded-lg font-semibold text-sm transition-colors shadow-sm"
+            className="flex items-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg font-semibold text-sm transition-colors shadow-sm"
           >
             <UserPlus className="w-4 h-4" />
             Invitar miembro
@@ -166,7 +196,7 @@ export default function TeamPage() {
       </div>
 
       {/* Tabla */}
-      <div className="bg-card rounded-xl border border-border overflow-hidden">
+      <div className="bg-card rounded-xl border border-border">
         {/* Encabezados */}
         <div className="grid grid-cols-[1fr_auto_auto] bg-muted border-b border-border">
           <div className="px-5 py-3">

@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { User, ChevronDown } from "lucide-react";
+import { useEffect, useMemo, useState, useRef } from "react";
+import { User, ChevronDown, Check } from "lucide-react";
 import KanbanBoard from "../components/KanbanBoard";
 import KanbanColumn from "../components/KanbanColumn";
 import AddTaskModal from "../components/AddTaskModal";
@@ -28,11 +28,75 @@ const mapBackendTask = (t) => ({
   })),
 });
 
-const getMemberName = (id, members) => {
-  if (!id) return "Sin asignar";
-  const m = members.find((m) => m.id === Number(id));
-  return m ? m.name : "Sin asignar";
-};
+// ─── Dropdown selector genérico ───────────────────────────────────────────────
+function DropdownSelector({
+  currentValue,
+  options,
+  onChange,
+  placeholder = "Seleccionar...",
+  className = "",
+  optionClassName = () => "",
+}) {
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef(null);
+
+  const dropdownStyle = () => {
+    if (!btnRef.current) return {};
+    const r = btnRef.current.getBoundingClientRect();
+    return {
+      position: "fixed",
+      left: `${r.left}px`,
+      top: `${r.bottom + 4}px`,
+      minWidth: `${r.width}px`,
+    };
+  };
+
+  const selectedOption = options.find((opt) => opt.value === currentValue);
+
+  return (
+    <div className="relative max-w-full">
+      <button
+        ref={btnRef}
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((o) => !o);
+        }}
+        className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border transition-all hover:shadow-sm bg-card text-foreground border-border max-w-[110px] ${className}`}
+      >
+        <span className="truncate min-w-0 flex-1">
+          {selectedOption ? selectedOption.label : placeholder}
+        </span>
+        <ChevronDown className="w-3 h-3 opacity-60 shrink-0 flex-none" />
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div
+            style={dropdownStyle()}
+            className="bg-card border border-border rounded-lg shadow-lg z-20 py-1 max-h-48 overflow-y-auto"
+          >
+            {options.map((option) => (
+              <button
+                key={option.value}
+                onClick={() => {
+                  setOpen(false);
+                  if (option.value !== currentValue) onChange(option.value);
+                }}
+                className={`w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-muted transition-colors ${optionClassName(option.value)}`}
+              >
+                <span className="truncate">{option.label}</span>
+                {option.value === currentValue && (
+                  <Check className="w-3.5 h-3.5 text-[#007BFF] shrink-0 ml-2" />
+                )}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 function KanbanPage() {
   const { activeProject } = useProject();
@@ -44,8 +108,23 @@ function KanbanPage() {
   const [selectedTaskId, setSelectedTaskId] = useState(null);
   const [projectMembers, setProjectMembers] = useState([]);
 
-  const selectedTask = tasks.find((t) => t.id === selectedTaskId);
+  // Rol del usuario en el proyecto actual (normalizado a minúsculas)
+  const userRole = (activeProject?.role || "Developer").toLowerCase();
 
+  // Definir grupos de roles
+  const FULL_EDIT_ROLES = ["scrum master", "product owner"];
+  const TASK_MOVEMENT_ROLES = ["scrum master", "product owner", "developer", "tester"]; // quiénes pueden mover tareas
+  const TIME_LOGGING_ROLES = ["scrum master", "product owner", "developer", "tester"]; // quiénes pueden registrar tiempo
+
+  // Permisos
+  const canEdit = FULL_EDIT_ROLES.includes(userRole);
+  const canCreateTask = canEdit;
+  const canChangePriority = canEdit;
+  const canChangeAssignee = canEdit;
+  const canMoveTasks = TASK_MOVEMENT_ROLES.includes(userRole);
+  const canLogTime = TIME_LOGGING_ROLES.includes(userRole);
+
+  const selectedTask = tasks.find((t) => t.id === selectedTaskId);
   const backlogTasks = useMemo(() => tasks, [tasks]);
 
   useEffect(() => {
@@ -73,7 +152,9 @@ function KanbanPage() {
     }
 
     loadTasks();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [activeProject]);
 
   useEffect(() => {
@@ -103,32 +184,10 @@ function KanbanPage() {
     }
 
     loadMembers();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [activeProject]);
-
-  const statusLabelStyles = {
-    [TaskStatus.TODO]: "bg-slate-100 text-slate-700",
-    [TaskStatus.IN_PROGRESS]: "bg-blue-100 text-blue-700",
-    [TaskStatus.DONE]: "bg-green-100 text-green-700",
-  };
-
-  const priorityPillStyles = {
-    Alta: "bg-red-100 text-red-700 border-red-200",
-    Media: "bg-amber-100 text-amber-700 border-amber-200",
-    Baja: "bg-emerald-100 text-emerald-700 border-emerald-200",
-  };
-
-  const priorityTextColors = {
-    Alta: "text-red-600",
-    Media: "text-amber-600",
-    Baja: "text-emerald-600",
-  };
-
-  const prioritySelectStyles = {
-    Alta: "bg-red-50 border-red-200 text-red-700",
-    Media: "bg-amber-50 border-amber-200 text-amber-700",
-    Baja: "bg-emerald-50 border-emerald-200 text-emerald-700",
-  };
 
   const handleSaveTaskStatus = async (taskId, newStatus) => {
     const prevId = taskId.startsWith("local-") ? null : taskId;
@@ -141,20 +200,13 @@ function KanbanPage() {
 
     setTasks((prevTasks) =>
       prevTasks.map((task) => {
-        if (task.id !== taskId || task.status === newStatus) {
-          return task;
-        }
-
+        if (task.id !== taskId || task.status === newStatus) return task;
         return {
           ...task,
           status: newStatus,
           statusHistory: [
             ...(Array.isArray(task.statusHistory) ? task.statusHistory : []),
-            {
-              status: newStatus,
-              changedAt: new Date(),
-              changedBy: "Usuario",
-            },
+            { status: newStatus, changedAt: new Date(), changedBy: "Usuario" },
           ],
         };
       })
@@ -176,20 +228,12 @@ function KanbanPage() {
 
     setTasks((prevTasks) =>
       prevTasks.map((task) => {
-        if (task.id !== taskId) {
-          return task;
-        }
-
+        if (task.id !== taskId) return task;
         return {
           ...task,
           timeEntries: [
             ...(Array.isArray(task.timeEntries) ? task.timeEntries : []),
-            {
-              date: new Date(),
-              hours,
-              loggedBy: "Usuario",
-              note: note || null,
-            },
+            { date: new Date(), hours, loggedBy: "Usuario", note: note || null },
           ],
         };
       })
@@ -211,9 +255,7 @@ function KanbanPage() {
       assignee: data.assignee,
       avatarColor: data.avatarColor,
       createdAt: new Date(),
-      statusHistory: [
-        { status: TaskStatus.TODO, changedAt: new Date(), changedBy: "System" },
-      ],
+      statusHistory: [{ status: TaskStatus.TODO, changedAt: new Date(), changedBy: "System" }],
       estimatedHours: 4,
       timeEntries: [],
     };
@@ -263,6 +305,7 @@ function KanbanPage() {
       };
       setTasks((prevTasks) => [...prevTasks, localTask]);
     }
+
     setBacklogTitle("");
     setIsCreating(false);
   };
@@ -294,7 +337,9 @@ function KanbanPage() {
     }
 
     setTasks((prevTasks) =>
-      prevTasks.map((task) => (task.id === taskId ? { ...task, priority: priorityValue } : task))
+      prevTasks.map((task) =>
+        task.id === taskId ? { ...task, priority: priorityValue } : task
+      )
     );
   };
 
@@ -340,148 +385,202 @@ function KanbanPage() {
 
       <div className="flex gap-4 mb-6">
         <section className="flex-1 ml-4 min-h-[420px] rounded-lg border border-border bg-card shadow-sm overflow-hidden">
+          {/* ── Header ── */}
           <div className="px-5 py-4 border-b border-border bg-card">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div className="flex items-start gap-3">
-              <div className="mt-1 h-10 w-1.5 rounded-full bg-slate-900" />
-              <div>
-                <h2 className="text-base font-semibold text-foreground leading-tight">Product Backlog</h2>
-                <p className="text-sm text-muted-foreground mt-0.5">
-                  Lista principal de tareas del proyecto.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 self-start md:self-auto">
-              <span className="text-xs text-muted-foreground">Tareas</span>
-              <span className="inline-flex items-center rounded-full bg-muted text-muted-foreground px-2 py-1 text-xs font-medium">
-                {backlogTasks.length}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div className="p-4">
-          <div className="hidden md:grid grid-cols-12 gap-3 px-3 pb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-            <div className="col-span-6">Tarea</div>
-            <div className="col-span-2">Responsable</div>
-            <div className="col-span-2">Prioridad</div>
-            <div className="col-span-2">Estado</div>
-          </div>
-
-          <div className="space-y-2">
-            {loading ? (
-              <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500">
-                Cargando tareas...
-              </div>
-            ) : backlogTasks.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500">
-                No hay tareas en backlog todavía.
-              </div>
-            ) : (
-              backlogTasks.map((task) => (
-                <div
-                  key={`backlog-${task.id}`}
-                  className={`grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-3 rounded-xl border px-3 py-3 transition-shadow cursor-pointer ${
-                    selectedTaskId === task.id
-                      ? "border-slate-400 bg-slate-50 shadow-sm"
-                      : "border-slate-200 bg-white hover:shadow-sm"
-                  }`}
-                  onClick={() => setSelectedTaskId(task.id)}
-                >
-                  <div className="md:col-span-6">
-                    <p className="text-sm font-semibold text-slate-800">{task.title}</p>
-                  </div>
-                  <div className="md:col-span-2 flex items-center text-sm text-slate-700">
-                    <div className="flex items-center gap-2 w-full">
-                      <User className="w-4 h-4 text-muted-foreground shrink-0" />
-                      <select
-                        className="w-full bg-transparent px-0 py-1 text-xs md:text-sm focus:outline-none cursor-pointer"
-                        value={task.assignee || ""}
-                        onChange={(e) => handleBacklogAssigneeChange(task.id, e.target.value)}
-                      >
-                        <option value="">Sin asignar</option>
-                        {projectMembers.map((m) => (
-                          <option key={m.id} value={m.id}>{m.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                  <div className="md:col-span-2 flex items-center">
-                    <div className="relative inline-flex items-center">
-                      <select
-                        className={`
-                          appearance-none cursor-pointer border-none outline-none
-                          text-xs md:text-sm font-semibold rounded-lg
-                          pl-2.5 pr-6 py-1
-                          ${task.priority === "Alta"  ? "bg-red-50 text-red-700" : ""}
-                          ${task.priority === "Media" ? "bg-amber-50 text-amber-700" : ""}
-                          ${task.priority === "Baja"  ? "bg-emerald-50 text-emerald-700" : ""}
-                        `}
-                        value={task.priority}
-                        onChange={(e) => handleBacklogPriorityChange(task.id, e.target.value)}
-                      >
-                        <option value="Alta" style={{ color: "#b91c1c", backgroundColor: "#fef2f2" }}>Alta</option>
-                        <option value="Media" style={{ color: "#b45309", backgroundColor: "#fffbeb" }}>Media</option>
-                        <option value="Baja" style={{ color: "#047857", backgroundColor: "#ecfdf5" }}>Baja</option>
-                      </select>
-                      <ChevronDown
-                        className={`
-                          pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5
-                          ${task.priority === "Alta"  ? "text-red-700" : ""}
-                          ${task.priority === "Media" ? "text-amber-700" : ""}
-                          ${task.priority === "Baja"  ? "text-emerald-700" : ""}
-                        `}
-                      />
-                    </div>
-                  </div>
-                  <div className="md:col-span-2 flex items-center">
-                    <span className="text-xs md:text-sm font-medium text-slate-700">
-                      {task.status}
-                    </span>
-                  </div>
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div className="flex items-start gap-3">
+                <div className="mt-1 h-10 w-1.5 rounded-full bg-slate-900" />
+                <div>
+                  <h2 className="text-base font-semibold text-foreground leading-tight">
+                    Product Backlog
+                  </h2>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    Lista principal de tareas del proyecto.
+                  </p>
                 </div>
-              ))
-            )}
+              </div>
+
+              <div className="flex items-center gap-2 self-start md:self-auto">
+                <span className="text-xs text-muted-foreground">Tareas</span>
+                <span className="inline-flex items-center rounded-full bg-muted text-muted-foreground px-2 py-1 text-xs font-medium">
+                  {backlogTasks.length}
+                </span>
+              </div>
+            </div>
           </div>
 
+          {/* ── Tabla ── */}
+          <div className="p-4">
+            {/* Headers - Hidden on mobile */}
+            <div className="hidden md:grid grid-cols-12 gap-4 px-4 pb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground border-b border-border">
+              <div className="col-span-6">Tarea</div>
+              <div className="col-span-2 text-center">Responsable</div>
+              <div className="col-span-2 text-center">Prioridad</div>
+              <div className="col-span-2 text-center">Estado</div>
+            </div>
+
+            <div className="space-y-3 mt-3">
+              {loading ? (
+                <div className="rounded-lg border border-dashed border-border bg-muted/50 p-8 text-center text-sm text-muted-foreground">
+                  <div className="animate-pulse">Cargando tareas...</div>
+                </div>
+              ) : backlogTasks.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-border bg-muted/50 p-8 text-center text-sm text-muted-foreground">
+                  No hay tareas en backlog todavía.
+                </div>
+              ) : (
+                backlogTasks.map((task) => (
+                  <div
+                    key={`backlog-${task.id}`}
+                    className={`grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4 rounded-xl border px-4 py-4 transition-all cursor-pointer hover:shadow-md ${
+                      selectedTaskId === task.id
+                        ? "border-primary bg-primary/5 shadow-sm"
+                        : "border-border bg-card hover:bg-muted/50"
+                    }`}
+                    onClick={() => setSelectedTaskId(task.id)}
+                  >
+                    {/* Título - Mobile: full width, Desktop: col-span-6 */}
+                    <div className="md:col-span-6 flex items-center">
+                      <p className="text-sm font-semibold text-foreground truncate">{task.title}</p>
+                    </div>
+
+                    {/* Responsable - Mobile: label + content, Desktop: centered */}
+                    <div className="md:col-span-2 flex items-center justify-center">
+                      <div className="flex items-center gap-2 w-full md:justify-center">
+                        <span className="text-xs text-muted-foreground md:hidden">Responsable:</span>
+                        <div className="flex items-center gap-1.5 min-w-0 flex-1 md:flex-none">
+                          <User className="w-4 h-4 text-muted-foreground shrink-0" />
+                          {canChangeAssignee ? (
+                            <DropdownSelector
+                              currentValue={task.assignee || ""}
+                              options={[
+                                { label: "Sin asignar", value: "" },
+                                ...projectMembers.map((m) => ({ label: m.name, value: m.id })),
+                              ]}
+                              onChange={(value) => handleBacklogAssigneeChange(task.id, value)}
+                              placeholder="Sin asignar"
+                              className="flex-1 md:w-auto"
+                            />
+                          ) : (
+                            <span className="text-sm truncate flex-1 md:w-auto">
+                              {task.assigneeName || "Sin asignar"}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                     {/* Prioridad - Mobile: label + content, Desktop: centered */}
+                     <div className="md:col-span-2 flex items-center justify-center">
+                       <div className="flex items-center gap-2 w-full md:justify-center">
+                         <span className="text-xs text-muted-foreground md:hidden">Prioridad:</span>
+                         {canChangePriority ? (
+                           <DropdownSelector
+                             currentValue={task.priority}
+                             options={[
+                               { label: "Alta", value: "Alta" },
+                               { label: "Media", value: "Media" },
+                               { label: "Baja", value: "Baja" },
+                             ]}
+                             onChange={(value) => handleBacklogPriorityChange(task.id, value)}
+                             className={`font-semibold flex-1 md:w-auto
+                               ${task.priority === "Alta"  ? "bg-red-50    text-red-700    border-red-200"    : ""}
+                               ${task.priority === "Media" ? "bg-amber-50  text-amber-700  border-amber-200"  : ""}
+                               ${task.priority === "Baja"  ? "bg-emerald-50 text-emerald-700 border-emerald-200" : ""}
+                             `}
+                             optionClassName={(value) => {
+                               if (value === "Alta")  return "text-red-700    hover:bg-red-50";
+                               if (value === "Media") return "text-amber-700  hover:bg-amber-50";
+                               if (value === "Baja")  return "text-emerald-700 hover:bg-emerald-50";
+                               return "";
+                             }}
+                           />
+                         ) : (
+                           <span className={`font-semibold px-2.5 py-1 rounded-lg text-xs border
+                             ${task.priority === "Alta"  ? "bg-red-50 text-red-700 border-red-200"    : ""}
+                             ${task.priority === "Media" ? "bg-amber-50 text-amber-700 border-amber-200"  : ""}
+                             ${task.priority === "Baja"  ? "bg-emerald-50 text-emerald-700 border-emerald-200" : ""}
+                           `}>
+                             {task.priority}
+                           </span>
+                         )}
+                       </div>
+                     </div>
+
+                    {/* Estado - Mobile: label + content, Desktop: centered */}
+                    <div className="md:col-span-2 flex items-center justify-center">
+                      <div className="flex items-center gap-2 w-full md:justify-center">
+                        <span className="text-xs text-muted-foreground md:hidden">Estado:</span>
+                        <span
+                          className={`text-xs font-medium px-3 py-1.5 rounded-full whitespace-nowrap
+                            ${task.status === TaskStatus.TODO        ? "bg-slate-100  text-slate-700"  : ""}
+                            ${task.status === TaskStatus.IN_PROGRESS ? "bg-blue-100   text-blue-700"   : ""}
+                            ${task.status === TaskStatus.DONE        ? "bg-emerald-100 text-emerald-700" : ""}
+                          `}
+                        >
+                          {task.status === TaskStatus.TODO        && "Por Hacer"}
+                          {task.status === TaskStatus.IN_PROGRESS && "En Progreso"}
+                          {task.status === TaskStatus.DONE        && "Hecho"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* ── Crear tarea ── */}
           <div className="mt-4">
-            {isCreating ? (
-              <form onSubmit={handleAddBacklogTask} className="flex gap-3 items-end">
-                <div className="flex-1">
-                  <label className="mb-1 block text-xs font-medium text-muted-foreground">Título de la tarea</label>
-                  <input
-                    className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
-                    placeholder="Ej. Diseñar dashboard de métricas"
-                    value={backlogTitle}
-                    onChange={(e) => setBacklogTitle(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Escape") {
-                        setBacklogTitle("");
-                        setIsCreating(false);
-                      }
-                    }}
-                    onBlur={() => {
-                      if (!backlogTitle.trim()) {
-                        setIsCreating(false);
-                      }
-                    }}
-                    autoFocus
-                  />
-                </div>
-              </form>
+            {canCreateTask ? (
+              isCreating ? (
+                <form onSubmit={handleAddBacklogTask} className="flex gap-3 items-end">
+                  <div className="flex-1">
+                    <label className="mb-1 block text-xs font-medium text-muted-foreground">Título de la tarea</label>
+                    <input
+                      className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                      placeholder="Ej. Diseñar dashboard de métricas"
+                      value={backlogTitle}
+                      onChange={(e) => setBacklogTitle(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Escape") {
+                          setBacklogTitle("");
+                          setIsCreating(false);
+                        }
+                      }}
+                      onBlur={() => {
+                        if (!backlogTitle.trim()) {
+                          setIsCreating(false);
+                        }
+                      }}
+                      autoFocus
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={!backlogTitle.trim()}
+                    className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-black transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                  >
+                    Crear
+                  </button>
+                </form>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setIsCreating(true)}
+                  className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-black transition-colors"
+                >
+                  + Crear tarea
+                </button>
+              )
             ) : (
-              <button
-                type="button"
-                onClick={() => setIsCreating(true)}
-                className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-black transition-colors"
-              >
-                + Crear
-              </button>
+              <p className="text-xs text-muted-foreground italic">
+                Solo Scrum Masters y Product Owners pueden crear tareas
+              </p>
             )}
           </div>
-        </div>
-      </section>
+
+          </div>
+        </section>
 
       <TaskDetailPanel
         task={selectedTask}
@@ -489,41 +588,52 @@ function KanbanPage() {
         onUpdateTask={handleUpdateTask}
         onDeleteTask={handleDeleteTask}
         projectMembers={projectMembers}
+        userRole={userRole}
       />
-    </div>
+      </div>
 
-    <KanbanBoard>
-        <KanbanColumn
-          title="Por Hacer"
-          tasks={todoTasks}
-          count={todoTasks.length}
-          onAddTask={() => setIsAddModalOpen(true)}
-          onSaveTaskStatus={handleSaveTaskStatus}
-          onLogTaskTime={handleLogTaskTime}
-          columnStatus={TaskStatus.TODO}
-          onDropTaskToStatus={handleDropTaskToStatus}
-        />
-        <KanbanColumn
-          title="En Progreso"
-          tasks={inProgressTasks}
-          count={inProgressTasks.length}
-          onAddTask={() => setIsAddModalOpen(true)}
-          onSaveTaskStatus={handleSaveTaskStatus}
-          onLogTaskTime={handleLogTaskTime}
-          columnStatus={TaskStatus.IN_PROGRESS}
-          onDropTaskToStatus={handleDropTaskToStatus}
-        />
-        <KanbanColumn
-          title="Hecho"
-          tasks={doneTasks}
-          count={doneTasks.length}
-          onAddTask={() => setIsAddModalOpen(true)}
-          onSaveTaskStatus={handleSaveTaskStatus}
-          onLogTaskTime={handleLogTaskTime}
-          columnStatus={TaskStatus.DONE}
-          onDropTaskToStatus={handleDropTaskToStatus}
-        />
-      </KanbanBoard>
+      {/* ── Kanban Board ── */}
+      <KanbanBoard>
+          <KanbanColumn
+            title="Por Hacer"
+            tasks={todoTasks}
+            count={todoTasks.length}
+            onAddTask={() => setIsAddModalOpen(true)}
+            onSaveTaskStatus={handleSaveTaskStatus}
+            onLogTaskTime={handleLogTaskTime}
+            columnStatus={TaskStatus.TODO}
+            onDropTaskToStatus={handleDropTaskToStatus}
+            canCreateTask={canCreateTask}
+            canMoveTasks={canMoveTasks}
+            canLogTime={canLogTime}
+          />
+          <KanbanColumn
+            title="En Progreso"
+            tasks={inProgressTasks}
+            count={inProgressTasks.length}
+            onAddTask={() => setIsAddModalOpen(true)}
+            onSaveTaskStatus={handleSaveTaskStatus}
+            onLogTaskTime={handleLogTaskTime}
+            columnStatus={TaskStatus.IN_PROGRESS}
+            onDropTaskToStatus={handleDropTaskToStatus}
+            canCreateTask={canCreateTask}
+            canMoveTasks={canMoveTasks}
+            canLogTime={canLogTime}
+          />
+          <KanbanColumn
+            title="Hecho"
+            tasks={doneTasks}
+            count={doneTasks.length}
+            onAddTask={() => setIsAddModalOpen(true)}
+            onSaveTaskStatus={handleSaveTaskStatus}
+            onLogTaskTime={handleLogTaskTime}
+            columnStatus={TaskStatus.DONE}
+            onDropTaskToStatus={handleDropTaskToStatus}
+            canCreateTask={canCreateTask}
+            canMoveTasks={canMoveTasks}
+            canLogTime={canLogTime}
+          />
+        </KanbanBoard>
 
       <AddTaskModal
         isOpen={isAddModalOpen}

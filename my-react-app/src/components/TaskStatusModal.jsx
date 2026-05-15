@@ -24,7 +24,7 @@ const statusIcons = {
   "Hecho": "●",
 };
 
-export function TaskStatusModal({ task, isOpen, onClose, onSave, onLogTime }) {
+export function TaskStatusModal({ task, isOpen, onClose, onSave, onLogTime, canChangeStatus = true, canLogTime = true }) {
   const [selectedStatus, setSelectedStatus] = useState("To Do");
   const [hasChanges, setHasChanges] = useState(false);
   const [hoursToLog, setHoursToLog] = useState("");
@@ -46,14 +46,14 @@ export function TaskStatusModal({ task, isOpen, onClose, onSave, onLogTime }) {
   }, [selectedStatus, task]);
 
   const handleSave = () => {
-    if (task && hasChanges) {
+    if (task && hasChanges && canChangeStatus) {
       onSave(task.id, selectedStatus);
       onClose();
     }
   };
 
   const handleLogTime = () => {
-    if (task && hoursToLog && parseFloat(hoursToLog) > 0) {
+    if (task && hoursToLog && parseFloat(hoursToLog) > 0 && canLogTime) {
       onLogTime(task.id, parseFloat(hoursToLog), timeNote || undefined);
       setHoursToLog("");
       setTimeNote("");
@@ -61,18 +61,18 @@ export function TaskStatusModal({ task, isOpen, onClose, onSave, onLogTime }) {
   };
 
   const handleKeyDown = (e) => {
-    // Don\\'t trigger shortcuts when typing in inputs
     if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") {
       return;
     }
-    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+    // Solo shortcuts si tiene permisos
+    if (canChangeStatus && e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
       handleSave();
     } else if (e.key === "Escape") {
       onClose();
     }
-  };
+   };
 
-  if (!task) return null;
+   if (!task) return null;
 
   // Defensive defaults: some task objects might not have these fields yet.
   const safeTimeEntries = Array.isArray(task.timeEntries) ? task.timeEntries : [];
@@ -118,10 +118,13 @@ export function TaskStatusModal({ task, isOpen, onClose, onSave, onLogTime }) {
             {/* Status Selector */}
             <div className="space-y-2">
               <Label htmlFor="status-select" className="text-sm font-medium">
-                Actualizar Estado
+                Actualizar Estado {!canChangeStatus && <span className="text-xs text-muted-foreground">(solo lectura)</span>}
               </Label>
-              <Select value={selectedStatus} onValueChange={(value) => setSelectedStatus(value)}>
-                <SelectTrigger id="status-select" className="w-full">
+              <Select 
+                value={selectedStatus} 
+                onValueChange={(value) => canChangeStatus && setSelectedStatus(value)}
+              >
+                <SelectTrigger id="status-select" className={`w-full ${!canChangeStatus ? 'bg-muted cursor-not-allowed' : ''}`} disabled={!canChangeStatus}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -145,7 +148,7 @@ export function TaskStatusModal({ task, isOpen, onClose, onSave, onLogTime }) {
                   </SelectItem>
                 </SelectContent>
               </Select>
-              {hasChanges && (
+              {hasChanges && canChangeStatus && (
                 <p className="text-xs text-muted-foreground flex items-center gap-1">
                   <Check className="w-3 h-3" />
                   El estado se actualizará a <strong>{selectedStatus}</strong>
@@ -258,6 +261,7 @@ export function TaskStatusModal({ task, isOpen, onClose, onSave, onLogTime }) {
               <h4 className="font-medium flex items-center gap-2">
                 <Timer className="w-4 h-4" />
                 Registrar Tiempo Trabajado
+                {!canLogTime && <span className="text-xs text-muted-foreground ml-auto">(solo lectura)</span>}
               </h4>
               <div className="grid gap-4">
                 <div className="space-y-2">
@@ -269,8 +273,9 @@ export function TaskStatusModal({ task, isOpen, onClose, onSave, onLogTime }) {
                     min="0"
                     placeholder="ej. 2.5"
                     value={hoursToLog}
-                    onChange={(e) => setHoursToLog(e.target.value)}
-                    className="w-full"
+                    onChange={(e) => canLogTime && setHoursToLog(e.target.value)}
+                    className={`w-full ${!canLogTime ? 'bg-muted cursor-not-allowed' : ''}`}
+                    disabled={!canLogTime}
                   />
                 </div>
                 <div className="space-y-2">
@@ -279,14 +284,15 @@ export function TaskStatusModal({ task, isOpen, onClose, onSave, onLogTime }) {
                     id="time-note"
                     placeholder="¿En qué trabajaste?"
                     value={timeNote}
-                    onChange={(e) => setTimeNote(e.target.value)}
+                    onChange={(e) => canLogTime && setTimeNote(e.target.value)}
                     rows={2}
-                    className="resize-none"
+                    className={`resize-none ${!canLogTime ? 'bg-muted cursor-not-allowed' : ''}`}
+                    disabled={!canLogTime}
                   />
                 </div>
                 <Button
                   onClick={handleLogTime}
-                  disabled={!hoursToLog || parseFloat(hoursToLog) <= 0}
+                  disabled={!hoursToLog || parseFloat(hoursToLog) <= 0 || !canLogTime}
                   className="w-full gap-2"
                 >
                   <Check className="w-4 h-4" />
@@ -350,7 +356,7 @@ export function TaskStatusModal({ task, isOpen, onClose, onSave, onLogTime }) {
               e.stopPropagation();
               handleSave();
             }}
-            disabled={!hasChanges}
+            disabled={!hasChanges || !canChangeStatus}
             className="gap-2"
           >
             <Check className="w-4 h-4" />

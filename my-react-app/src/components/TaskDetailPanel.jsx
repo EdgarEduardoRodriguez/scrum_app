@@ -28,7 +28,11 @@ function formatDate(date) {
   });
 }
 
-export default function TaskDetailPanel({ task, onClose, onUpdateTask, onDeleteTask, projectMembers = [] }) {
+// ── Permisos por rol ────────────────────────────────────────────────────────
+export default function TaskDetailPanel({ task, onClose, onUpdateTask, onDeleteTask, projectMembers = [], userRole = "developer" }) {
+  // Normalizar rol a minúsculas para comparación
+  const normalizedRole = userRole.toLowerCase();
+  const canEdit = normalizedRole === "scrum master" || normalizedRole === "product owner";
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [assignee, setAssignee] = useState("");
@@ -80,13 +84,13 @@ export default function TaskDetailPanel({ task, onClose, onUpdateTask, onDeleteT
       <div className="flex items-center justify-between px-4 py-3 border-b border-border">
         <h3 className="text-sm font-semibold text-foreground">Detalles de la Tarea</h3>
         <div className="flex items-center gap-1">
-          {hasChanges && (
+          {canEdit && hasChanges && (
             <Button size="sm" variant="ghost" onClick={handleSave} className="h-8 px-2 gap-1 text-xs">
               <Save className="w-3.5 h-3.5" />
               Guardar
             </Button>
           )}
-          {task && (
+          {canEdit && task && (
             <Button
               size="sm"
               variant="ghost"
@@ -105,75 +109,133 @@ export default function TaskDetailPanel({ task, onClose, onUpdateTask, onDeleteT
 
       <ScrollArea className="flex-1 p-4">
         <div className="space-y-4">
+          {/* Título */}
           <div className="space-y-2">
             <Label className="text-xs font-medium text-muted-foreground">Título</Label>
-            <Input value={title} onChange={(e) => setTitle(e.target.value)} className="text-sm" />
+            {canEdit ? (
+              <Input value={title} onChange={(e) => setTitle(e.target.value)} className="text-sm" />
+            ) : (
+              <p className="text-sm text-foreground px-3 py-2 rounded-md bg-muted/50 border border-border">
+                {title || "Sin título"}
+              </p>
+            )}
           </div>
 
+          {/* Descripción */}
           <div className="space-y-2">
             <Label className="text-xs font-medium text-muted-foreground">Descripción</Label>
-            <Textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="text-sm resize-none"
-              rows={3}
-            />
+            {canEdit ? (
+              <Textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                className="text-sm resize-none"
+                rows={3}
+              />
+            ) : (
+              <p className="text-sm text-foreground px-3 py-2 rounded-md bg-muted/50 border border-border whitespace-pre-wrap">
+                {description || "Sin descripción"}
+              </p>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
+            {/* Responsable */}
             <div className="space-y-2">
               <Label className="text-xs font-medium text-muted-foreground">Responsable</Label>
-              <Select value={assignee ? String(assignee) : "none"} onValueChange={(val) => setAssignee(val === "none" ? null : Number(val))}>
-                <SelectTrigger className="text-sm">
-                  <SelectValue placeholder="Sin asignar" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Sin asignar</SelectItem>
-                  {projectMembers.map((m) => (
-                    <SelectItem key={m.id} value={String(m.id)}>
-                      <div className="flex items-center gap-2">
-                        <User className="w-3.5 h-3.5 text-muted-foreground" />
-                        {m.name}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {canEdit ? (
+                <Select value={assignee ? String(assignee) : "none"} onValueChange={(val) => setAssignee(val === "none" ? null : Number(val))}>
+                  <SelectTrigger className="text-sm">
+                    <SelectValue placeholder="Sin asignar" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sin asignar</SelectItem>
+                    {projectMembers.map((m) => (
+                      <SelectItem key={m.id} value={String(m.id)}>
+                        <div className="flex items-center gap-2">
+                          <User className="w-3.5 h-3.5 text-muted-foreground" />
+                          {m.name}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <p className="text-sm text-foreground px-3 py-2 rounded-md bg-muted/50 border border-border truncate">
+                  {projectMembers.find(m => m.id === assignee)?.name || "Sin asignar"}
+                </p>
+              )}
             </div>
 
+            {/* Prioridad */}
             <div className="space-y-2">
               <Label className="text-xs font-medium text-muted-foreground">Prioridad</Label>
-              <Select value={priority} onValueChange={setPriority}>
-                <SelectTrigger className="text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Alta">Alta</SelectItem>
-                  <SelectItem value="Media">Media</SelectItem>
-                  <SelectItem value="Baja">Baja</SelectItem>
-                </SelectContent>
-              </Select>
+              {canEdit ? (
+                <Select value={priority} onValueChange={setPriority}>
+                  <SelectTrigger className="text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Alta">Alta</SelectItem>
+                    <SelectItem value="Media">Media</SelectItem>
+                    <SelectItem value="Baja">Baja</SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-medium w-fit
+                  ${priority === "Alta"  ? "bg-red-100 text-red-700"   : ""}
+                  ${priority === "Media" ? "bg-amber-100 text-amber-700" : ""}
+                  ${priority === "Baja"  ? "bg-emerald-100 text-emerald-700" : ""}
+                `}>
+                  {priority}
+                </span>
+              )}
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
+            {/* Responsable */}
             <div className="space-y-2">
-              <Label className="text-xs font-medium text-muted-foreground">Estado</Label>
-              <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${statusColors[task.status] || ""}`}>
-                {task.status === TaskStatus.TODO ? "Por Hacer" : task.status === TaskStatus.IN_PROGRESS ? "En Progreso" : "Hecho"}
-              </span>
+              <Label className="text-xs font-medium text-muted-foreground">Responsable</Label>
+              {canEdit ? (
+                <Select value={assignee ? String(assignee) : "none"} onValueChange={(val) => setAssignee(val === "none" ? null : Number(val))}>
+                  <SelectTrigger className="text-sm">
+                    <SelectValue placeholder="Sin asignar" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sin asignar</SelectItem>
+                    {projectMembers.map((m) => (
+                      <SelectItem key={m.id} value={String(m.id)}>
+                        <div className="flex items-center gap-2">
+                          <User className="w-3.5 h-3.5 text-muted-foreground" />
+                          {m.name}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <p className="text-sm text-foreground px-3 py-2 rounded-md bg-muted/50 border border-border truncate">
+                  {projectMembers.find(m => m.id === assignee)?.name || "Sin asignar"}
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">
               <Label className="text-xs font-medium text-muted-foreground">Horas Estimadas</Label>
-              <Input
-                type="number"
-                min="0"
-                step="0.5"
-                value={estimatedHours}
-                onChange={(e) => setEstimatedHours(parseFloat(e.target.value) || 0)}
-                className="text-sm"
-              />
+              {canEdit ? (
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  value={estimatedHours}
+                  onChange={(e) => setEstimatedHours(parseFloat(e.target.value) || 0)}
+                  className="text-sm"
+                />
+              ) : (
+                <p className="text-sm text-foreground px-3 py-2 rounded-md bg-muted/50 border border-border">
+                  {estimatedHours}h
+                </p>
+              )}
             </div>
           </div>
 

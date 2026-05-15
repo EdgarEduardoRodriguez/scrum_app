@@ -152,52 +152,48 @@ def project_detail(request, pk):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     elif request.method == "DELETE":
-        # Solo Scrum Master puede eliminar
-        membership = ProjectMember.objects.filter(project=project, user=request.user).first()
-        if not membership or membership.role != "Scrum Master":
-            return Response({"detail": "Solo Scrum Master puede eliminar el proyecto"}, status=status.HTTP_403_FORBIDDEN)
         project.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-@api_view(["POST"])
+@api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def add_project_member(request, pk):
     """Crea invitación de miembro al proyecto (solo Scrum Master)."""
-
+    
     try:
         project = Project.objects.get(pk=pk)
     except Project.DoesNotExist:
-        return Response({"detail": "Proyecto no encontrado"}, status=status.HTTP_404_NOT_FOUND)
+        return Response({'detail': 'Proyecto no encontrado'}, status=status.HTTP_404_NOT_FOUND)
 
     current_membership = ProjectMember.objects.filter(project=project, user=request.user).first()
-    if not current_membership or current_membership.role != "Scrum Master":
-        return Response({"detail": "Solo Scrum Master puede agregar miembros"}, status=status.HTTP_403_FORBIDDEN)
+    if not current_membership or current_membership.role != 'Scrum Master':
+        return Response({'detail': 'Solo Scrum Master puede agregar miembros'}, status=status.HTTP_403_FORBIDDEN)
 
     serializer = AddMemberSerializer(data=request.data)
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    user_id = serializer.validated_data["user_id"]
-    role = serializer.validated_data["role"]
+    user_id = serializer.validated_data['user_id']
+    role = serializer.validated_data['role']
 
     try:
         user = User.objects.get(pk=user_id)
     except User.DoesNotExist:
-        return Response({"detail": "Usuario no encontrado"}, status=status.HTTP_404_NOT_FOUND)
+        return Response({'detail': 'Usuario no encontrado'}, status=status.HTTP_404_NOT_FOUND)
 
     existing_member = ProjectMember.objects.filter(project=project, user=user).first()
     if existing_member:
-        return Response({"detail": "El usuario ya pertenece al proyecto"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'detail': 'El usuario ya pertenece al proyecto'}, status=status.HTTP_400_BAD_REQUEST)
 
     invitation, created = ProjectInvitation.objects.get_or_create(
         project=project,
         invited_user=user,
-        status="pending",
+        status='pending',
         defaults={
-            "invited_by": request.user,
-            "role": role,
-            "is_read": False,
+            'invited_by': request.user,
+            'role': role,
+            'is_read': False,
         }
     )
 
@@ -210,7 +206,47 @@ def add_project_member(request, pk):
     return Response(ProjectInvitationSerializer(invitation).data, status=status.HTTP_200_OK)
 
 
-@api_view(["GET"])
+@api_view(["PATCH"])
+@permission_classes([permissions.IsAuthenticated])
+def update_project_member_role(request, project_pk, member_id):
+    """Actualiza el rol de un miembro del proyecto (solo Scrum Master)."""
+    try:
+        project = Project.objects.get(pk=project_pk)
+    except Project.DoesNotExist:
+        return Response({"detail": "Proyecto no encontrado"}, status=status.HTTP_404_NOT_FOUND)
+
+    current_membership = ProjectMember.objects.filter(project=project, user=request.user).first()
+    if not current_membership or current_membership.role != "Scrum Master":
+        return Response({"detail": "Solo Scrum Master puede cambiar roles de miembros"}, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        member = ProjectMember.objects.get(pk=member_id, project=project)
+    except ProjectMember.DoesNotExist:
+        return Response({"detail": "Miembro no encontrado"}, status=status.HTTP_404_NOT_FOUND)
+
+    role = request.data.get("role")
+    if not role:
+        return Response({"detail": "El campo 'role' es requerido"}, status=status.HTTP_400_BAD_REQUEST)
+
+    allowed_roles = [choice[0] for choice in ProjectMember.ROLES]
+    if role not in allowed_roles:
+        return Response({"detail": f"Rol no válido. Opciones: {', '.join(allowed_roles)}"}, status=status.HTTP_400_BAD_REQUEST)
+
+    member.role = role
+    member.save()
+
+    return Response({
+        "id": member.id,
+        "user_id": member.user.id,
+        "first_name": member.user.first_name,
+        "last_name": member.user.last_name,
+        "email": member.user.email,
+        "role": member.role,
+        "joined_at": member.joined_at.isoformat() if member.joined_at else None,
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["GET", "POST"])
 @permission_classes([permissions.IsAuthenticated])
 def search_users_for_project(request, pk):
     """Busca usuarios para invitar a un proyecto (solo Scrum Master)."""
