@@ -1,7 +1,7 @@
 from django.contrib.auth.models import User
 from rest_framework import serializers
 
-from .models import Project, ProjectInvitation, ProjectMember, Task, TimeEntry
+from .models import Project, ProjectInvitation, ProjectMember, Sprint, SprintTask, Task, TimeEntry
 
 
 # Serializer para miembros de proyecto
@@ -114,6 +114,35 @@ class TimeEntrySerializer(serializers.ModelSerializer):
         model = TimeEntry
         fields = ["id", "task", "hours", "logged_by", "note", "date"]
         read_only_fields = ["id", "task", "date"]
+
+
+class SprintTaskSerializer(serializers.ModelSerializer):
+    """Serializer para la relación Sprint-Task."""
+    task_id = serializers.IntegerField(source="task.id", read_only=True)
+    task_title = serializers.CharField(source="task.title", read_only=True)
+    task_priority = serializers.CharField(source="task.priority", read_only=True)
+
+    class Meta:
+        model = SprintTask
+        fields = ["id", "task_id", "task_title", "task_priority", "order", "added_at"]
+        read_only_fields = ["id", "added_at"]
+
+
+class SprintSerializer(serializers.ModelSerializer):
+    """Serializer para el modelo Sprint."""
+    tasks = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Sprint
+        fields = [
+            "id", "project", "name", "goal", "start_date", "end_date",
+            "status", "tasks", "created_at", "updated_at",
+        ]
+        read_only_fields = ["id", "project", "created_at", "updated_at", "tasks"]
+
+    def get_tasks(self, obj):
+        sprint_tasks = obj.sprint_tasks.select_related("task").all()
+        return SprintTaskSerializer(sprint_tasks, many=True).data
 
 
 class TaskSerializer(serializers.ModelSerializer):

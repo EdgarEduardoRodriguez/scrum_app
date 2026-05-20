@@ -11,7 +11,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
-from .models import Project, ProjectInvitation, ProjectMember, Task, TimeEntry
+from .models import Project, ProjectInvitation, ProjectMember, Sprint, SprintTask, Task, TimeEntry
 
 from .serializers import (
     AddMemberSerializer,
@@ -19,6 +19,7 @@ from .serializers import (
     ProjectInvitationSerializer,
     ProjectSerializer,
     RegisterSerializer,
+    SprintSerializer,
     TaskSerializer,
     TimeEntrySerializer,
 )
@@ -342,6 +343,84 @@ def task_log_time(request, project_pk, task_pk):
         serializer.save(task=task)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+# ------------------------------
+# Sprint API Views
+# ------------------------------
+
+@api_view(["GET", "POST"])
+@permission_classes([permissions.IsAuthenticated])
+def sprint_list_create(request, project_pk):
+    """Lista sprints de un proyecto o crea un nuevo sprint."""
+    try:
+        project = Project.objects.get(pk=project_pk, members__user=request.user)
+    except Project.DoesNotExist:
+        return Response({"detail": "Proyecto no encontrado"}, status=status.HTTP_404_NOT_FOUND)
+
+    if request.method == "GET":
+        sprints = Sprint.objects.filter(project=project)
+        serializer = SprintSerializer(sprints, many=True)
+        return Response(serializer.data)
+
+    elif request.method == "POST":
+        serializer = SprintSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(project=project)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(["GET", "PATCH", "DELETE"])
+@permission_classes([permissions.IsAuthenticated])
+def sprint_detail(request, project_pk, sprint_pk):
+    """Obtiene, actualiza o elimina un sprint específico."""
+    try:
+        project = Project.objects.get(pk=project_pk, members__user=request.user)
+        sprint = Sprint.objects.get(pk=sprint_pk, project=project)
+    except (Project.DoesNotExist, Sprint.DoesNotExist):
+        return Response({"detail": "Sprint no encontrado"}, status=status.HTTP_404_NOT_FOUND)
+
+    if request.method == "GET":
+        serializer = SprintSerializer(sprint)
+        return Response(serializer.data)
+
+    elif request.method == "PATCH":
+        serializer = SprintSerializer(sprint, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    elif request.method == "DELETE":
+        sprint.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(["POST", "DELETE"])
+@permission_classes([permissions.IsAuthenticated])
+def sprint_task_toggle(request, project_pk, sprint_pk, task_pk):
+    """Agrega o quita una tarea de un sprint."""
+    try:
+        project = Project.objects.get(pk=project_pk, members__user=request.user)
+        sprint = Sprint.objects.get(pk=sprint_pk, project=project)
+        task = Task.objects.get(pk=task_pk, project=project)
+    except (Project.DoesNotExist, Sprint.DoesNotExist, Task.DoesNotExist):
+        return Response({"detail": "Sprint o tarea no encontrada"}, status=status.HTTP_404_NOT_FOUND)
+
+    if request.method == "POST":
+        _, created = SprintTask.objects.get_or_create(sprint=sprint, task=task)
+        if created:
+            serializer = SprintSerializer(sprint)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response({"detail": "La tarea ya está en el sprint"}, status=status.HTTP_200_OK)
+
+    elif request.method == "DELETE":
+        deleted, _ = SprintTask.objects.filter(sprint=sprint, task=task).delete()
+        if deleted:
+            serializer = SprintSerializer(sprint)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response({"detail": "La tarea no está en el sprint"}, status=status.HTTP_404_NOT_FOUND)
+
 
 @api_view(["GET"])
 @permission_classes([permissions.IsAuthenticated])

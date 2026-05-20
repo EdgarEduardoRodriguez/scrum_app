@@ -180,3 +180,62 @@ class TimeEntry(models.Model):
 
     def __str__(self):
         return f"{self.hours}h - {self.task.title}"
+
+
+class Sprint(models.Model):
+    STATUS_CHOICES = [
+        ("Planificando", "Planificando"),
+        ("En Progreso", "En Progreso"),
+        ("Completado", "Completado"),
+    ]
+
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.CASCADE,
+        related_name="sprints",
+        verbose_name="Proyecto"
+    )
+    name = models.CharField(max_length=200, verbose_name="Nombre del sprint")
+    goal = models.TextField(blank=True, verbose_name="Objetivo del sprint")
+    start_date = models.DateField(null=True, blank=True, verbose_name="Fecha de inicio")
+    end_date = models.DateField(null=True, blank=True, verbose_name="Fecha de fin")
+    status = models.CharField(
+        max_length=20, choices=STATUS_CHOICES, default="Planificando", verbose_name="Estado"
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Fecha de creación")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Última actualización")
+
+    class Meta:
+        verbose_name = "Sprint"
+        verbose_name_plural = "Sprints"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.name} - {self.project.name}"
+
+
+class SprintTask(models.Model):
+    """Relación muchas-a-muchas entre Sprint y Task con orden."""
+    sprint = models.ForeignKey(
+        Sprint,
+        on_delete=models.CASCADE,
+        related_name="sprint_tasks",
+        verbose_name="Sprint"
+    )
+    task = models.ForeignKey(
+        Task,
+        on_delete=models.CASCADE,
+        related_name="sprint_assignments",
+        verbose_name="Tarea"
+    )
+    order = models.IntegerField(default=0, verbose_name="Orden")
+    added_at = models.DateTimeField(auto_now_add=True, verbose_name="Fecha de adición")
+
+    class Meta:
+        verbose_name = "Tarea de sprint"
+        verbose_name_plural = "Tareas de sprint"
+        unique_together = ["sprint", "task"]
+        ordering = ["order", "added_at"]
+
+    def __str__(self):
+        return f"{self.sprint.name} -> {self.task.title}"

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Calendar,
   Plus,
@@ -46,60 +46,77 @@ function formatDate(iso) {
   });
 }
 
-let nextId = 1;
-
 export default function SprintPage() {
   const { activeProject } = useProject();
   const [sprints, setSprints] = useState([]);
   const [selectedSprintId, setSelectedSprintId] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [editingSprint, setEditingSprint] = useState(null);
-  const [sprintTasks, setSprintTasks] = useState({});
   const [backlogTasks, setBacklogTasks] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loadingBacklog, setLoadingBacklog] = useState(true);
+  const [loadingSprints, setLoadingSprints] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   const [form, setForm] = useState({
     name: "", goal: "", startDate: "", endDate: "",
   });
 
-  // Fetch backlog tasks from backend (mirrors KanbanPage.jsx logic)
-  useEffect(() => {
+  // ── Fetch sprints from backend ─────────────────────────────────
+  const fetchSprints = useCallback(async () => {
     if (!activeProject) {
-      setBacklogTasks([]);
-      setLoading(false);
+      setSprints([]);
+      setLoadingSprints(false);
       return;
     }
-
-    let cancelled = false;
-
-    async function loadTasks() {
-      try {
-        setLoading(true);
-        const res = await apiFetch(`/api/auth/projects/${activeProject.id}/tasks/`);
-        if (cancelled) return;
-        if (res.ok) {
-          const data = await res.json();
-          setBacklogTasks(
-            data.map((t) => ({
-              id: String(t.id),
-              title: t.title,
-              priority: t.priority || "Media",
-            }))
-          );
-        }
-      } catch (err) {
-        console.error("Error loading backlog tasks:", err);
-      } finally {
-        if (!cancelled) setLoading(false);
+    try {
+      setLoadingSprints(true);
+      const res = await apiFetch(`/api/auth/projects/${activeProject.id}/sprints/`);
+      if (res.ok) {
+        const data = await res.json();
+        setSprints(data);
       }
+    } catch (err) {
+      console.error("Error loading sprints:", err);
+    } finally {
+      setLoadingSprints(false);
     }
-
-    loadTasks();
-    return () => {
-      cancelled = true;
-    };
   }, [activeProject]);
 
+  // ── Fetch backlog tasks from backend ───────────────────────────
+  const fetchBacklogTasks = useCallback(async () => {
+    if (!activeProject) {
+      setBacklogTasks([]);
+      setLoadingBacklog(false);
+      return;
+    }
+    try {
+      setLoadingBacklog(true);
+      const res = await apiFetch(`/api/auth/projects/${activeProject.id}/tasks/`);
+      if (res.ok) {
+        const data = await res.json();
+        setBacklogTasks(
+          data.map((t) => ({
+            id: String(t.id),
+            title: t.title,
+            priority: t.priority || "Media",
+          }))
+        );
+      }
+    } catch (err) {
+      console.error("Error loading backlog tasks:", err);
+    } finally {
+      setLoadingBacklog(false);
+    }
+  }, [activeProject]);
+
+  useEffect(() => { fetchSprints(); }, [fetchSprints]);
+  useEffect(() => { fetchBacklogTasks(); }, [fetchBacklogTasks]);
+
+  // ── Derived state: tasks of the selected sprint ────────────────
+  const selectedSprint = sprints.find((s) => s.id === selectedSprintId);
+  const currentTasks = selectedSprint?.tasks || [];
+
+  // ── Form helpers ───────────────────────────────────────────────
   const resetForm = () => {
     setForm({ name: "", goal: "", startDate: "", endDate: "" });
     setEditingSprint(null);
@@ -107,74 +124,105 @@ export default function SprintPage() {
 
   const openCreateModal = () => { resetForm(); setShowModal(true); };
 
-  const openEditModal = (sprint) => {
+  const openEditModal = () => {
+    if (!selectedSprint) return;
     setForm({
-      name: sprint.name,
-      goal: sprint.goal || "",
-      startDate: sprint.startDate || "",
-      endDate: sprint.endDate || "",
+      name: selectedSprint.name,
+      goal: selectedSprint.goal || "",
+      startDate: selectedSprint.startDate || "",
+      endDate: selectedSprint.endDate || "",
     });
-    setEditingSprint(sprint);
+    setEditingSprint(selectedSprint);
     setShowModal(true);
   };
 
-  const handleSave = () => {
-    if (!form.name.trim()) return;
-
-    if (editingSprint) {
-      setSprints((prev) =>
-        prev.map((s) =>
-          s.id === editingSprint.id
-            ? { ...s, ...form }
-            : s
-        )
-      );
-    } else {
-      const newSprint = {
-        id: nextId++,
-        name: form.name,
-        goal: form.goal,
-        startDate: form.startDate,
-        endDate: form.endDate,
-        status: "Planificando",
-      };
-      setSprints((prev) => [...prev, newSprint]);
-      setSelectedSprintId(newSprint.id);
+  // ── Create / Update sprint ─────────────────────────────────────
+  const handleSave = async () => {
+    if (!form.name.trim() || !activeProject) return;
+    setSaving(true);
+    try {
+      if (editingSprint) {
+        const res = await apiFetch(`/api/auth/projects/${activeProject.id}/sprints/${editingSprint.id}/`, {
+          method: "PATCH",
+          body: JSON.stringify(form),
+        });
+        if (res.ok) {
+          const updated = await res.json();
+          setSprints((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+        }
+      } else {
+        const res = await apiFetch(`/api/auth/projects/${activeProject.id}/sprints/`, {
+          method: "POST",
+          body: JSON.stringify({ ...form, status: "Planificando" }),
+        });
+        if (res.ok) {
+          const created = await res.json();
+          setSprints((prev) => [...prev, created]);
+          setSelectedSprintId(created.id);
+        }
+      }
+      setShowModal(false);
+      resetForm();
+    } catch (err) {
+      console.error("Error saving sprint:", err);
+    } finally {
+      setSaving(false);
     }
-
-    setShowModal(false);
-    resetForm();
   };
 
-  const handleDelete = (sprintId) => {
-    if (!confirm("¿Estás seguro de eliminar este sprint?")) return;
-    setSprints((prev) => prev.filter((s) => s.id !== sprintId));
-    setSprintTasks((prev) => { const next = { ...prev }; delete next[sprintId]; return next; });
+  // ── Delete sprint ──────────────────────────────────────────────
+  const handleDelete = async (sprintId) => {
+    if (!confirm("¿Estás seguro de eliminar este sprint?") || !activeProject) return;
+    try {
+      const res = await apiFetch(`/api/auth/projects/${activeProject.id}/sprints/${sprintId}/`, {
+        method: "DELETE",
+      });
+      if (res.ok || res.status === 204) {
+        setSprints((prev) => prev.filter((s) => s.id !== sprintId));
+        if (selectedSprintId === sprintId) setSelectedSprintId(null);
+      }
+    } catch (err) {
+      console.error("Error deleting sprint:", err);
+    }
   };
 
-  const handleStatusChange = (sprint) => {
+  // ── Change status (Planificando → En Progreso → Completado) ──
+  const handleStatusChange = async (sprint) => {
+    if (!activeProject) return;
     const cycle = { Planificando: "En Progreso", "En Progreso": "Completado", Completado: "Planificando" };
-    setSprints((prev) => prev.map((s) => s.id === sprint.id ? { ...s, status: cycle[s.status] } : s));
+    const newStatus = cycle[sprint.status];
+    try {
+      const res = await apiFetch(`/api/auth/projects/${activeProject.id}/sprints/${sprint.id}/`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setSprints((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+      }
+    } catch (err) {
+      console.error("Error changing sprint status:", err);
+    }
   };
 
-  const handleDragStart = (e, taskId) => {
-    e.dataTransfer.setData("text/plain", taskId);
-    e.dataTransfer.effectAllowed = "copy";
-  };
-
-  const handleDropOnSprint = (e) => {
+  // ── Drag & drop: add task to sprint ────────────────────────────
+  const handleDropOnSprint = async (e) => {
     e.preventDefault();
     const taskId = e.dataTransfer.getData("text/plain");
-    if (!taskId || !selectedSprintId) return;
+    if (!taskId || !selectedSprintId || !activeProject) return;
 
-    const task = backlogTasks.find((t) => t.id === taskId);
-    if (!task) return;
-
-    setSprintTasks((prev) => {
-      const current = prev[selectedSprintId] || [];
-      if (current.find((t) => t.id === taskId)) return prev;
-      return { ...prev, [selectedSprintId]: [...current, task] };
-    });
+    try {
+      const res = await apiFetch(
+        `/api/auth/projects/${activeProject.id}/sprints/${selectedSprintId}/tasks/${taskId}/`,
+        { method: "POST" }
+      );
+      if (res.ok) {
+        const updatedSprint = await res.json();
+        setSprints((prev) => prev.map((s) => (s.id === updatedSprint.id ? updatedSprint : s)));
+      }
+    } catch (err) {
+      console.error("Error adding task to sprint:", err);
+    }
   };
 
   const handleDragOver = (e) => {
@@ -182,15 +230,29 @@ export default function SprintPage() {
     e.dataTransfer.dropEffect = "copy";
   };
 
-  const removeTaskFromSprint = (sprintId, taskId) => {
-    setSprintTasks((prev) => ({
-      ...prev,
-      [sprintId]: (prev[sprintId] || []).filter((t) => t.id !== taskId),
-    }));
+  const handleDragStart = (e, taskId) => {
+    e.dataTransfer.setData("text/plain", taskId);
+    e.dataTransfer.effectAllowed = "copy";
   };
 
-  const selectedSprint = sprints.find((s) => s.id === selectedSprintId);
+  // ── Remove task from sprint ────────────────────────────────────
+  const removeTaskFromSprint = async (sprintId, taskId) => {
+    if (!activeProject) return;
+    try {
+      const res = await apiFetch(
+        `/api/auth/projects/${activeProject.id}/sprints/${sprintId}/tasks/${taskId}/`,
+        { method: "DELETE" }
+      );
+      if (res.ok) {
+        const updatedSprint = await res.json();
+        setSprints((prev) => prev.map((s) => (s.id === updatedSprint.id ? updatedSprint : s)));
+      }
+    } catch (err) {
+      console.error("Error removing task from sprint:", err);
+    }
+  };
 
+  // ── Stats ──────────────────────────────────────────────────────
   const stats = {
     total: sprints.length,
     active: sprints.filter((s) => s.status === "En Progreso").length,
@@ -199,8 +261,7 @@ export default function SprintPage() {
 
   const cycle = { Planificando: "En Progreso", "En Progreso": "Completado", Completado: "Planificando" };
 
-  const currentTasks = sprintTasks[selectedSprintId] || [];
-
+  // ── Helpers ────────────────────────────────────────────────────
   const CycleIcon = ({ status }) => {
     const icons = { Planificando: Play, "En Progreso": CheckCircle2, Completado: AlertCircle };
     const colors = { Planificando: "text-[#007BFF]", "En Progreso": "text-green-600", Completado: "text-yellow-500" };
@@ -208,6 +269,9 @@ export default function SprintPage() {
     return <Icon className={`w-4 h-4 ${colors[status] || ""}`} />;
   };
 
+  const isTaskInSprint = (taskId) => currentTasks.some((t) => String(t.task_id) === String(taskId));
+
+  // ── Render ─────────────────────────────────────────────────────
   return (
     <div className="max-w-6xl mx-auto">
       {/* Header */}
@@ -250,7 +314,9 @@ export default function SprintPage() {
       </div>
 
       {/* Sprint Selector */}
-      {sprints.length > 0 && (
+      {loadingSprints ? (
+        <div className="text-sm text-muted-foreground py-2 animate-pulse">Cargando sprints...</div>
+      ) : sprints.length > 0 ? (
         <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1">
           <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap">
             Sprints:
@@ -274,7 +340,7 @@ export default function SprintPage() {
             );
           })}
         </div>
-      )}
+      ) : null}
 
       {/* Split Panel */}
       {selectedSprint ? (
@@ -301,7 +367,7 @@ export default function SprintPage() {
             </div>
 
             <div className="p-3 space-y-2 max-h-[500px] overflow-y-auto">
-              {loading ? (
+              {loadingBacklog ? (
                 <div className="rounded-lg border border-dashed border-border bg-muted/50 p-8 text-center text-sm text-muted-foreground">
                   <div className="animate-pulse">Cargando tareas...</div>
                 </div>
@@ -311,36 +377,37 @@ export default function SprintPage() {
                 </div>
               ) : (
                 backlogTasks.map((task) => {
-                const inSprint = currentTasks.find((t) => t.id === task.id);
-                return (
-                  <div
-                    key={task.id}
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, task.id)}
-                    className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-all cursor-grab active:cursor-grabbing ${
-                      inSprint
-                        ? "border-emerald-200 bg-emerald-50/50 opacity-60"
-                        : "border-border bg-card hover:border-[#007BFF] hover:shadow-sm"
-                    }`}
-                  >
-                    <GripVertical className="w-4 h-4 text-muted-foreground shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-sm font-medium truncate ${inSprint ? "text-muted-foreground" : "text-foreground"}`}>
-                        {task.title}
-                      </p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className={`text-xs font-medium px-1.5 py-0.5 rounded border ${PRIORITY_STYLES[task.priority]}`}>
-                          {task.priority}
-                        </span>
-                        <span className="text-xs text-muted-foreground">{DIFFICULTY[task.priority]} pts dificultad</span>
+                  const inSprint = isTaskInSprint(task.id);
+                  return (
+                    <div
+                      key={task.id}
+                      draggable={!inSprint}
+                      onDragStart={(e) => handleDragStart(e, task.id)}
+                      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-all ${
+                        inSprint
+                          ? "border-emerald-200 bg-emerald-50/50 opacity-60 cursor-not-allowed"
+                          : "border-border bg-card hover:border-[#007BFF] hover:shadow-sm cursor-grab active:cursor-grabbing"
+                      }`}
+                    >
+                      <GripVertical className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-medium truncate ${inSprint ? "text-muted-foreground" : "text-foreground"}`}>
+                          {task.title}
+                        </p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className={`text-xs font-medium px-1.5 py-0.5 rounded border ${PRIORITY_STYLES[task.priority]}`}>
+                            {task.priority}
+                          </span>
+                          <span className="text-xs text-muted-foreground">{DIFFICULTY[task.priority]} pts dificultad</span>
+                        </div>
                       </div>
+                      {inSprint && (
+                        <span className="text-xs text-emerald-600 font-medium shrink-0">En sprint</span>
+                      )}
                     </div>
-                    {inSprint && (
-                      <span className="text-xs text-emerald-600 font-medium shrink-0">En sprint</span>
-                    )}
-                  </div>
-                );
-              }))}
+                  );
+                })
+              )}
             </div>
           </section>
 
@@ -394,7 +461,7 @@ export default function SprintPage() {
                     <CycleIcon status={selectedSprint.status} />
                   </button>
                   <button
-                    onClick={() => openEditModal(selectedSprint)}
+                    onClick={openEditModal}
                     className="p-2 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
                     title="Editar"
                   >
@@ -416,7 +483,7 @@ export default function SprintPage() {
                   {currentTasks.length} tarea{currentTasks.length !== 1 ? "s" : ""}
                 </span>
                 <span className="flex items-center gap-1 text-amber-600 font-medium">
-                  {currentTasks.reduce((s, t) => s + DIFFICULTY[t.priority], 0)} pts dificultad
+                  {currentTasks.reduce((s, t) => s + DIFFICULTY[t.task_priority], 0)} pts dificultad
                 </span>
               </div>
             </div>
@@ -434,23 +501,23 @@ export default function SprintPage() {
                   </p>
                 </div>
               ) : (
-                currentTasks.map((task) => (
+                currentTasks.map((st) => (
                   <div
-                    key={task.id}
+                    key={st.id}
                     className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-border bg-card hover:shadow-sm transition-shadow group"
                   >
                     <GripVertical className="w-4 h-4 text-muted-foreground shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">{task.title}</p>
+                      <p className="text-sm font-medium text-foreground truncate">{st.task_title}</p>
                       <div className="flex items-center gap-2 mt-0.5">
-                        <span className={`text-xs font-medium px-1.5 py-0.5 rounded border ${PRIORITY_STYLES[task.priority]}`}>
-                          {task.priority}
+                        <span className={`text-xs font-medium px-1.5 py-0.5 rounded border ${PRIORITY_STYLES[st.task_priority]}`}>
+                          {st.task_priority}
                         </span>
-                        <span className="text-xs text-muted-foreground">{DIFFICULTY[task.priority]} pts dificultad</span>
+                        <span className="text-xs text-muted-foreground">{DIFFICULTY[st.task_priority]} pts dificultad</span>
                       </div>
                     </div>
                     <button
-                      onClick={() => removeTaskFromSprint(selectedSprintId, task.id)}
+                      onClick={() => removeTaskFromSprint(selectedSprintId, st.task_id)}
                       className="p-1 rounded-md text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-muted hover:text-destructive transition-all"
                       title="Quitar del sprint"
                     >
@@ -464,16 +531,22 @@ export default function SprintPage() {
         </div>
       ) : (
         <div className="bg-card rounded-xl border border-border">
-          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-            <Calendar className="w-10 h-10 mb-3 opacity-30" />
-            <p className="text-sm font-medium">No hay sprints todavía</p>
-            <button
-              onClick={openCreateModal}
-              className="mt-3 text-sm text-[#007BFF] hover:underline font-medium"
-            >
-              Crear el primer sprint
-            </button>
-          </div>
+          {loadingSprints ? (
+            <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+              <div className="animate-pulse">Cargando sprints...</div>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+              <Calendar className="w-10 h-10 mb-3 opacity-30" />
+              <p className="text-sm font-medium">No hay sprints todavía</p>
+              <button
+                onClick={openCreateModal}
+                className="mt-3 text-sm text-[#007BFF] hover:underline font-medium"
+              >
+                Crear el primer sprint
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -511,7 +584,9 @@ export default function SprintPage() {
 
             <DialogFooter>
               <Button variant="outline" onClick={() => { setShowModal(false); resetForm(); }}>Cancelar</Button>
-              <Button onClick={handleSave}>{editingSprint ? "Guardar cambios" : "Crear sprint"}</Button>
+              <Button onClick={handleSave} disabled={saving}>
+                {saving ? "Guardando..." : editingSprint ? "Guardar cambios" : "Crear sprint"}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
