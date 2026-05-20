@@ -10,7 +10,8 @@ import ComingSoon from './pages/ComingSoon';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import ProjectsPage from './pages/ProjectsPage';
-import TeamPage from './pages/TeamPage'; // ← nuevo
+import TeamPage from './pages/TeamPage';
+import SprintPage from './pages/SprintPage';
 
 function App() {
   return (
@@ -51,7 +52,7 @@ function App() {
           <Route index element={<Dashboard />} />
           <Route path="kanban" element={<KanbanPage />} />
           <Route path="tareas" element={<KanbanPage />} />
-          <Route path="sprints" element={<ComingSoon title="Gestión de Sprints" />} />
+          <Route path="sprints" element={<SprintPage />} />
           <Route path="equipo" element={<TeamPage />} /> {/* ← antes era ComingSoon */}
           <Route path="reportes" element={<ComingSoon title="Reportes y Métricas" />} />
           <Route path="configuracion" element={<ComingSoon title="Configuración" />} />
