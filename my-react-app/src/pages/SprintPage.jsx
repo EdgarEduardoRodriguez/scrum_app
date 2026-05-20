@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Calendar,
   Plus,
@@ -12,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 import { useProject } from "../context/ProjectContext";
+import { apiFetch } from "../utils/api";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "../components/ui/dialog";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -19,19 +20,6 @@ import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
 
 const DIFFICULTY = { Alta: 3, Media: 2, Baja: 1 };
-
-const MOCK_BACKLOG_TASKS = [
-  { id: "pb-1", title: "Diseñar pantalla de login", priority: "Alta" },
-  { id: "pb-2", title: "Implementar autenticación JWT", priority: "Alta" },
-  { id: "pb-3", title: "Crear componentes de UI reutilizables", priority: "Media" },
-  { id: "pb-4", title: "Configurar base de datos de usuarios", priority: "Alta" },
-  { id: "pb-5", title: "Diseñar dashboard principal", priority: "Media" },
-  { id: "pb-6", title: "Implementar CRUD de proyectos", priority: "Media" },
-  { id: "pb-7", title: "Pruebas unitarias del backend", priority: "Baja" },
-  { id: "pb-8", title: "Documentar API REST", priority: "Baja" },
-  { id: "pb-9", title: "Configurar CI/CD", priority: "Media" },
-  { id: "pb-10", title: "Optimizar consultas de base de datos", priority: "Baja" },
-];
 
 const PRIORITY_STYLES = {
   Alta: "bg-red-50 text-red-700 border-red-200",
@@ -67,10 +55,50 @@ export default function SprintPage() {
   const [showModal, setShowModal] = useState(false);
   const [editingSprint, setEditingSprint] = useState(null);
   const [sprintTasks, setSprintTasks] = useState({});
+  const [backlogTasks, setBacklogTasks] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const [form, setForm] = useState({
     name: "", goal: "", startDate: "", endDate: "",
   });
+
+  // Fetch backlog tasks from backend (mirrors KanbanPage.jsx logic)
+  useEffect(() => {
+    if (!activeProject) {
+      setBacklogTasks([]);
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadTasks() {
+      try {
+        setLoading(true);
+        const res = await apiFetch(`/api/auth/projects/${activeProject.id}/tasks/`);
+        if (cancelled) return;
+        if (res.ok) {
+          const data = await res.json();
+          setBacklogTasks(
+            data.map((t) => ({
+              id: String(t.id),
+              title: t.title,
+              priority: t.priority || "Media",
+            }))
+          );
+        }
+      } catch (err) {
+        console.error("Error loading backlog tasks:", err);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    loadTasks();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeProject]);
 
   const resetForm = () => {
     setForm({ name: "", goal: "", startDate: "", endDate: "" });
@@ -139,7 +167,7 @@ export default function SprintPage() {
     const taskId = e.dataTransfer.getData("text/plain");
     if (!taskId || !selectedSprintId) return;
 
-    const task = MOCK_BACKLOG_TASKS.find((t) => t.id === taskId);
+    const task = backlogTasks.find((t) => t.id === taskId);
     if (!task) return;
 
     setSprintTasks((prev) => {
@@ -267,13 +295,22 @@ export default function SprintPage() {
                   </div>
                 </div>
                 <span className="inline-flex items-center rounded-full bg-muted text-muted-foreground px-2 py-1 text-xs font-medium">
-                  {MOCK_BACKLOG_TASKS.length}
+                  {backlogTasks.length}
                 </span>
               </div>
             </div>
 
             <div className="p-3 space-y-2 max-h-[500px] overflow-y-auto">
-              {MOCK_BACKLOG_TASKS.map((task) => {
+              {loading ? (
+                <div className="rounded-lg border border-dashed border-border bg-muted/50 p-8 text-center text-sm text-muted-foreground">
+                  <div className="animate-pulse">Cargando tareas...</div>
+                </div>
+              ) : backlogTasks.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-border bg-muted/50 p-8 text-center text-sm text-muted-foreground">
+                  No hay tareas en el backlog.
+                </div>
+              ) : (
+                backlogTasks.map((task) => {
                 const inSprint = currentTasks.find((t) => t.id === task.id);
                 return (
                   <div
@@ -303,7 +340,7 @@ export default function SprintPage() {
                     )}
                   </div>
                 );
-              })}
+              }))}
             </div>
           </section>
 
