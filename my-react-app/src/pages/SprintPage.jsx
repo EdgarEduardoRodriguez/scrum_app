@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Calendar,
   Plus,
@@ -18,6 +18,8 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
+import KanbanBoard from "../components/KanbanBoard";
+import KanbanColumn from "../components/KanbanColumn";
 
 const DIFFICULTY = { Alta: 3, Media: 2, Baja: 1 };
 
@@ -45,6 +47,22 @@ function formatDate(iso) {
     day: "numeric", month: "short", year: "numeric",
   });
 }
+
+// ── TaskCard mapping: convierte SprintTask a formato TaskCard ──────────────
+const toKanbanTask = (st) => ({
+  id: String(st.task_id),
+  title: st.task_title,
+  priority: st.task_priority,
+  status: st.task_status,
+  assignedTo: st.task_assignee_name || "Sin asignar",
+  assigneeName: st.task_assignee_name || "Sin asignar",
+  assignee: null,
+  avatarColor: st.task_avatar_color || "#3B82F6",
+  estimatedHours: 4,
+  description: "",
+  statusHistory: [],
+  timeEntries: [],
+});
 
 export default function SprintPage() {
   const { activeProject } = useProject();
@@ -112,9 +130,31 @@ export default function SprintPage() {
   useEffect(() => { fetchSprints(); }, [fetchSprints]);
   useEffect(() => { fetchBacklogTasks(); }, [fetchBacklogTasks]);
 
-  // ── Derived state: tasks of the selected sprint ────────────────
+  // ── Derived state: selected sprint & its tasks ─────────────────
   const selectedSprint = sprints.find((s) => s.id === selectedSprintId);
   const currentTasks = selectedSprint?.tasks || [];
+
+  // ── Kanban columns (derived) ───────────────────────────────────
+  const kanbanTasks = useMemo(() => currentTasks.map(toKanbanTask), [currentTasks]);
+
+  const todoTasks = useMemo(
+    () => kanbanTasks.filter((t) => t.status === "To Do"),
+    [kanbanTasks]
+  );
+  const inProgressTasks = useMemo(
+    () => kanbanTasks.filter((t) => t.status === "In Progress"),
+    [kanbanTasks]
+  );
+  const doneTasks = useMemo(
+    () => kanbanTasks.filter((t) => t.status === "Done"),
+    [kanbanTasks]
+  );
+
+  const completedCount = doneTasks.length;
+  const totalKanbanTasks = kanbanTasks.length;
+  const progressPercent = totalKanbanTasks > 0
+    ? Math.round((completedCount / totalKanbanTasks) * 100)
+    : 0;
 
   // ── Form helpers ───────────────────────────────────────────────
   const resetForm = () => {
@@ -186,7 +226,7 @@ export default function SprintPage() {
     }
   };
 
-  // ── Change status (Planificando → En Progreso → Completado) ──
+  // ── Change sprint status (Planificando → En Progreso → Completado) ──
   const handleStatusChange = async (sprint) => {
     if (!activeProject) return;
     const cycle = { Planificando: "En Progreso", "En Progreso": "Completado", Completado: "Planificando" };
@@ -205,7 +245,7 @@ export default function SprintPage() {
     }
   };
 
-  // ── Drag & drop: add task to sprint ────────────────────────────
+  // ── Drag & drop: add task from backlog to sprint ──────────────
   const handleDropOnSprint = async (e) => {
     e.preventDefault();
     const taskId = e.dataTransfer.getData("text/plain");
@@ -250,6 +290,31 @@ export default function SprintPage() {
     } catch (err) {
       console.error("Error removing task from sprint:", err);
     }
+  };
+
+  // ── Kanban: move task between columns (update status) ──────────
+  const handleSaveTaskStatus = async (taskId, newStatus) => {
+    if (!activeProject) return;
+    try {
+      await apiFetch(`/api/auth/projects/${activeProject.id}/tasks/${taskId}/`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: newStatus }),
+      });
+      // Refresh sprint to get updated task statuses
+      const res = await apiFetch(
+        `/api/auth/projects/${activeProject.id}/sprints/${selectedSprintId}/`
+      );
+      if (res.ok) {
+        const updated = await res.json();
+        setSprints((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+      }
+    } catch (err) {
+      console.error("Error updating task status:", err);
+    }
+  };
+
+  const handleDropTaskToStatus = (taskId, targetStatus) => {
+    handleSaveTaskStatus(taskId, targetStatus);
   };
 
   // ── Stats ──────────────────────────────────────────────────────
@@ -344,191 +409,269 @@ export default function SprintPage() {
 
       {/* Split Panel */}
       {selectedSprint ? (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* LEFT: Product Backlog */}
-          <section className="bg-card rounded-xl border border-border overflow-hidden">
-            <div className="px-5 py-4 border-b border-border">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="h-8 w-1 rounded-full bg-slate-900" />
-                  <div>
-                    <h2 className="text-base font-semibold text-foreground leading-tight">
-                      Product Backlog
-                    </h2>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Arrastra tareas al sprint
-                    </p>
+        <>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* LEFT: Product Backlog */}
+            <section className="bg-card rounded-xl border border-border overflow-hidden">
+              <div className="px-5 py-4 border-b border-border">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="h-8 w-1 rounded-full bg-slate-900" />
+                    <div>
+                      <h2 className="text-base font-semibold text-foreground leading-tight">
+                        Product Backlog
+                      </h2>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Arrastra tareas al sprint
+                      </p>
+                    </div>
+                  </div>
+                  <span className="inline-flex items-center rounded-full bg-muted text-muted-foreground px-2 py-1 text-xs font-medium">
+                    {backlogTasks.length}
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-3 space-y-2 max-h-[500px] overflow-y-auto">
+                {loadingBacklog ? (
+                  <div className="rounded-lg border border-dashed border-border bg-muted/50 p-8 text-center text-sm text-muted-foreground">
+                    <div className="animate-pulse">Cargando tareas...</div>
+                  </div>
+                ) : backlogTasks.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-border bg-muted/50 p-8 text-center text-sm text-muted-foreground">
+                    No hay tareas en el backlog.
+                  </div>
+                ) : (
+                  backlogTasks.map((task) => {
+                    const inSprint = isTaskInSprint(task.id);
+                    return (
+                      <div
+                        key={task.id}
+                        draggable={!inSprint}
+                        onDragStart={(e) => handleDragStart(e, task.id)}
+                        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-all ${
+                          inSprint
+                            ? "border-emerald-200 bg-emerald-50/50 opacity-60 cursor-not-allowed"
+                            : "border-border bg-card hover:border-[#007BFF] hover:shadow-sm cursor-grab active:cursor-grabbing"
+                        }`}
+                      >
+                        <GripVertical className="w-4 h-4 text-muted-foreground shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm font-medium truncate ${inSprint ? "text-muted-foreground" : "text-foreground"}`}>
+                            {task.title}
+                          </p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className={`text-xs font-medium px-1.5 py-0.5 rounded border ${PRIORITY_STYLES[task.priority]}`}>
+                              {task.priority}
+                            </span>
+                            <span className="text-xs text-muted-foreground">{DIFFICULTY[task.priority]} pts dificultad</span>
+                          </div>
+                        </div>
+                        {inSprint && (
+                          <span className="text-xs text-emerald-600 font-medium shrink-0">En sprint</span>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </section>
+
+            {/* RIGHT: Sprint Tasks (Drop Zone) */}
+            <section
+              onDrop={handleDropOnSprint}
+              onDragOver={handleDragOver}
+              className={`bg-card rounded-xl border-2 transition-all overflow-hidden ${
+                currentTasks.length === 0
+                  ? "border-dashed border-muted-foreground/30"
+                  : "border-border"
+              }`}
+            >
+              {/* Sprint header */}
+              <div className="px-5 py-4 border-b border-border">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="h-8 w-1 rounded-full"
+                      style={{
+                        backgroundColor:
+                          selectedSprint.status === "Completado" ? "#10B981"
+                          : selectedSprint.status === "En Progreso" ? "#007BFF"
+                          : "#F59E0B",
+                      }}
+                    />
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-base font-semibold text-foreground leading-tight">
+                          {selectedSprint.name}
+                        </h2>
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${
+                          STATUS_STYLES[selectedSprint.status] || STATUS_STYLES.Planificando
+                        }`}>
+                          <StatusIcon status={selectedSprint.status} />
+                          {selectedSprint.status}
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {formatDate(selectedSprint.startDate)} — {formatDate(selectedSprint.endDate)}
+                        {selectedSprint.goal && ` · ${selectedSprint.goal}`}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => handleStatusChange(selectedSprint)}
+                      className="p-2 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                      title={`Cambiar a ${cycle[selectedSprint.status]}`}
+                    >
+                      <CycleIcon status={selectedSprint.status} />
+                    </button>
+                    <button
+                      onClick={openEditModal}
+                      className="p-2 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                      title="Editar"
+                    >
+                      <Edit3 className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(selectedSprint.id)}
+                      className="p-2 rounded-lg text-muted-foreground hover:bg-muted hover:text-destructive transition-colors"
+                      title="Eliminar"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
-                <span className="inline-flex items-center rounded-full bg-muted text-muted-foreground px-2 py-1 text-xs font-medium">
-                  {backlogTasks.length}
-                </span>
-              </div>
-            </div>
 
-            <div className="p-3 space-y-2 max-h-[500px] overflow-y-auto">
-              {loadingBacklog ? (
-                <div className="rounded-lg border border-dashed border-border bg-muted/50 p-8 text-center text-sm text-muted-foreground">
-                  <div className="animate-pulse">Cargando tareas...</div>
+                <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <ListTodo className="w-3 h-3" />
+                    {currentTasks.length} tarea{currentTasks.length !== 1 ? "s" : ""}
+                  </span>
+                  <span className="flex items-center gap-1 text-amber-600 font-medium">
+                    {currentTasks.reduce((s, t) => s + DIFFICULTY[t.task_priority], 0)} pts dificultad
+                  </span>
                 </div>
-              ) : backlogTasks.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-border bg-muted/50 p-8 text-center text-sm text-muted-foreground">
-                  No hay tareas en el backlog.
-                </div>
-              ) : (
-                backlogTasks.map((task) => {
-                  const inSprint = isTaskInSprint(task.id);
-                  return (
+              </div>
+
+              {/* Drop zone */}
+              <div className="p-3 min-h-[300px] space-y-2 max-h-[500px] overflow-y-auto">
+                {currentTasks.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-[300px] text-muted-foreground">
+                    <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-3">
+                      <Plus className="w-6 h-6 opacity-40" />
+                    </div>
+                    <p className="text-sm font-medium">Sprint vacío</p>
+                    <p className="text-xs mt-1 text-center max-w-xs">
+                      Arrastra tareas desde el Product Backlog para planificar este sprint
+                    </p>
+                  </div>
+                ) : (
+                  currentTasks.map((st) => (
                     <div
-                      key={task.id}
-                      draggable={!inSprint}
-                      onDragStart={(e) => handleDragStart(e, task.id)}
-                      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-all ${
-                        inSprint
-                          ? "border-emerald-200 bg-emerald-50/50 opacity-60 cursor-not-allowed"
-                          : "border-border bg-card hover:border-[#007BFF] hover:shadow-sm cursor-grab active:cursor-grabbing"
-                      }`}
+                      key={st.id}
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-border bg-card hover:shadow-sm transition-shadow group"
                     >
                       <GripVertical className="w-4 h-4 text-muted-foreground shrink-0" />
                       <div className="flex-1 min-w-0">
-                        <p className={`text-sm font-medium truncate ${inSprint ? "text-muted-foreground" : "text-foreground"}`}>
-                          {task.title}
-                        </p>
+                        <p className="text-sm font-medium text-foreground truncate">{st.task_title}</p>
                         <div className="flex items-center gap-2 mt-0.5">
-                          <span className={`text-xs font-medium px-1.5 py-0.5 rounded border ${PRIORITY_STYLES[task.priority]}`}>
-                            {task.priority}
+                          <span className={`text-xs font-medium px-1.5 py-0.5 rounded border ${PRIORITY_STYLES[st.task_priority]}`}>
+                            {st.task_priority}
                           </span>
-                          <span className="text-xs text-muted-foreground">{DIFFICULTY[task.priority]} pts dificultad</span>
+                          <span className="text-xs text-muted-foreground">{DIFFICULTY[st.task_priority]} pts dificultad</span>
                         </div>
                       </div>
-                      {inSprint && (
-                        <span className="text-xs text-emerald-600 font-medium shrink-0">En sprint</span>
-                      )}
+                      <button
+                        onClick={() => removeTaskFromSprint(selectedSprintId, st.task_id)}
+                        className="p-1 rounded-md text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-muted hover:text-destructive transition-all"
+                        title="Quitar del sprint"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
                     </div>
-                  );
-                })
-              )}
-            </div>
-          </section>
+                  ))
+                )}
+              </div>
+            </section>
+          </div>
 
-          {/* RIGHT: Sprint Tasks (Drop Zone) */}
-          <section
-            onDrop={handleDropOnSprint}
-            onDragOver={handleDragOver}
-            className={`bg-card rounded-xl border-2 transition-all overflow-hidden ${
-              currentTasks.length === 0
-                ? "border-dashed border-muted-foreground/30"
-                : "border-border"
-            }`}
-          >
-            {/* Sprint header */}
-            <div className="px-5 py-4 border-b border-border">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
+          {/* ── PROGRESS BAR & KANBAN BOARD ────────────────────────── */}
+          {totalKanbanTasks > 0 && (
+            <div className="mt-8">
+              {/* Progress Bar */}
+              <div className="bg-card rounded-xl border border-border p-5 mb-6">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-semibold text-foreground">Progreso del Sprint</h3>
+                    <span className="text-xs text-muted-foreground">
+                      {completedCount} de {totalKanbanTasks} tareas completadas
+                    </span>
+                  </div>
+                  <span className="text-lg font-bold text-foreground">{progressPercent}%</span>
+                </div>
+                <div className="w-full h-3 bg-muted rounded-full overflow-hidden">
                   <div
-                    className="h-8 w-1 rounded-full"
+                    className="h-full rounded-full transition-all duration-500 ease-out"
                     style={{
+                      width: `${progressPercent}%`,
                       backgroundColor:
-                        selectedSprint.status === "Completado" ? "#10B981"
-                        : selectedSprint.status === "En Progreso" ? "#007BFF"
+                        progressPercent === 100 ? "#10B981"
+                        : progressPercent >= 50 ? "#007BFF"
                         : "#F59E0B",
                     }}
                   />
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-base font-semibold text-foreground leading-tight">
-                        {selectedSprint.name}
-                      </h2>
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${
-                        STATUS_STYLES[selectedSprint.status] || STATUS_STYLES.Planificando
-                      }`}>
-                        <StatusIcon status={selectedSprint.status} />
-                        {selectedSprint.status}
-                      </span>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {formatDate(selectedSprint.startDate)} — {formatDate(selectedSprint.endDate)}
-                      {selectedSprint.goal && ` · ${selectedSprint.goal}`}
-                    </p>
-                  </div>
                 </div>
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => handleStatusChange(selectedSprint)}
-                    className="p-2 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                    title={`Cambiar a ${cycle[selectedSprint.status]}`}
-                  >
-                    <CycleIcon status={selectedSprint.status} />
-                  </button>
-                  <button
-                    onClick={openEditModal}
-                    className="p-2 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                    title="Editar"
-                  >
-                    <Edit3 className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(selectedSprint.id)}
-                    className="p-2 rounded-lg text-muted-foreground hover:bg-muted hover:text-destructive transition-colors"
-                    title="Eliminar"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
-                <span className="flex items-center gap-1">
-                  <ListTodo className="w-3 h-3" />
-                  {currentTasks.length} tarea{currentTasks.length !== 1 ? "s" : ""}
-                </span>
-                <span className="flex items-center gap-1 text-amber-600 font-medium">
-                  {currentTasks.reduce((s, t) => s + DIFFICULTY[t.task_priority], 0)} pts dificultad
-                </span>
-              </div>
-            </div>
-
-            {/* Drop zone */}
-            <div className="p-3 min-h-[300px] space-y-2 max-h-[500px] overflow-y-auto">
-              {currentTasks.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-[300px] text-muted-foreground">
-                  <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-3">
-                    <Plus className="w-6 h-6 opacity-40" />
-                  </div>
-                  <p className="text-sm font-medium">Sprint vacío</p>
-                  <p className="text-xs mt-1 text-center max-w-xs">
-                    Arrastra tareas desde el Product Backlog para planificar este sprint
+                {progressPercent === 100 && (
+                  <p className="text-xs text-emerald-600 font-medium mt-2 flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3" />
+                    ¡Todas las tareas del sprint están completadas!
                   </p>
-                </div>
-              ) : (
-                currentTasks.map((st) => (
-                  <div
-                    key={st.id}
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-border bg-card hover:shadow-sm transition-shadow group"
-                  >
-                    <GripVertical className="w-4 h-4 text-muted-foreground shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">{st.task_title}</p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className={`text-xs font-medium px-1.5 py-0.5 rounded border ${PRIORITY_STYLES[st.task_priority]}`}>
-                          {st.task_priority}
-                        </span>
-                        <span className="text-xs text-muted-foreground">{DIFFICULTY[st.task_priority]} pts dificultad</span>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => removeTaskFromSprint(selectedSprintId, st.task_id)}
-                      className="p-1 rounded-md text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-muted hover:text-destructive transition-all"
-                      title="Quitar del sprint"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))
-              )}
+                )}
+              </div>
+
+              {/* Kanban Board */}
+              <KanbanBoard>
+                <KanbanColumn
+                  title="Por Hacer"
+                  tasks={todoTasks}
+                  count={todoTasks.length}
+                  onSaveTaskStatus={handleSaveTaskStatus}
+                  onLogTaskTime={() => {}}
+                  columnStatus="To Do"
+                  onDropTaskToStatus={handleDropTaskToStatus}
+                  canCreateTask={false}
+                  canMoveTasks={true}
+                  canLogTime={false}
+                />
+                <KanbanColumn
+                  title="En Progreso"
+                  tasks={inProgressTasks}
+                  count={inProgressTasks.length}
+                  onSaveTaskStatus={handleSaveTaskStatus}
+                  onLogTaskTime={() => {}}
+                  columnStatus="In Progress"
+                  onDropTaskToStatus={handleDropTaskToStatus}
+                  canCreateTask={false}
+                  canMoveTasks={true}
+                  canLogTime={false}
+                />
+                <KanbanColumn
+                  title="Hecho"
+                  tasks={doneTasks}
+                  count={doneTasks.length}
+                  onSaveTaskStatus={handleSaveTaskStatus}
+                  onLogTaskTime={() => {}}
+                  columnStatus="Done"
+                  onDropTaskToStatus={handleDropTaskToStatus}
+                  canCreateTask={false}
+                  canMoveTasks={true}
+                  canLogTime={false}
+                />
+              </KanbanBoard>
             </div>
-          </section>
-        </div>
+          )}
+        </>
       ) : (
         <div className="bg-card rounded-xl border border-border">
           {loadingSprints ? (

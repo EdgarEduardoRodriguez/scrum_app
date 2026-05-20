@@ -121,11 +121,27 @@ class SprintTaskSerializer(serializers.ModelSerializer):
     task_id = serializers.IntegerField(source="task.id", read_only=True)
     task_title = serializers.CharField(source="task.title", read_only=True)
     task_priority = serializers.CharField(source="task.priority", read_only=True)
+    task_status = serializers.CharField(source="task.status", read_only=True)
+    task_assignee_name = serializers.SerializerMethodField()
+    task_avatar_color = serializers.CharField(source="task.avatar_color", read_only=True)
 
     class Meta:
         model = SprintTask
-        fields = ["id", "task_id", "task_title", "task_priority", "order", "added_at"]
+        fields = [
+            "id", "task_id", "task_title", "task_priority", "task_status",
+            "task_assignee_name", "task_avatar_color", "order", "added_at",
+        ]
         read_only_fields = ["id", "added_at"]
+
+    def get_task_assignee_name(self, obj):
+        if obj.task.assignee is None:
+            return "Sin asignar"
+        try:
+            member = ProjectMember.objects.get(project=obj.task.project, user_id=obj.task.assignee)
+            name = f"{member.user.first_name} {member.user.last_name}".strip()
+            return name or member.user.username
+        except ProjectMember.DoesNotExist:
+            return "Sin asignar"
 
 
 class SprintSerializer(serializers.ModelSerializer):
