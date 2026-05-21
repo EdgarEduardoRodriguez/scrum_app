@@ -13,6 +13,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .models import Project, ProjectInvitation, ProjectMember, Sprint, SprintTask, Task, TimeEntry
 
+from .ai_service import calculate_sprint_dates_sequence, generate_multi_sprint
 from .serializers import (
     AddMemberSerializer,
     MeSerializer,
@@ -463,3 +464,122 @@ def respond_invitation(request, invitation_id):
     invitation.save()
 
     return Response(ProjectInvitationSerializer(invitation).data)
+
+
+# ------------------------------
+# AI Sprint Generation
+# ------------------------------
+
+@api_view(["POST"])
+@permission_classes([permissions.IsAuthenticated])
+def ai_generate_sprint(request, project_pk):
+    """
+    Genera MÚLTIPLES SPRINTS automáticamente usando IA.
+    
+    La IA/ algoritmo analiza:
+    - El product backlog completo
+    - Los miembros del equipo con sus roles
+    - La capacidad del equipo
+    
+    Y genera varios sprints, cada uno con su objetivo y tareas asignadas.
+    El backlog se divide en sprints sucesivos según la capacidad del equipo.
+    """
+    try:
+        project = Project.objects.get(pk=project_pk, members__user=request.user)
+    except Project.DoesNotExist:
+        return Response({"detail": "Proyecto no encontrado"}, status=status.HTTP_404_NOT_FOUND)
+
+    # Verificar permisos
+    current_membership = ProjectMember.objects.filter(project=project, user=request.user).first()
+    if not current_membership or current_membership.role not in ("Scrum Master", "Product Owner"):
+        return Response(
+            {"detail": "Solo Scrum Master o Product Owner pueden generar sprints con IA"},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    # Obtener miembros del proyecto
+    members = ProjectMember.objects.filter(project=project).select_related("user")
+
+    # Obtener tareas del backlog (sin sprint asignado)
+    tasks_in_sprints = SprintTask.objects.filter(sprint__project=project).values_list("task_id", flat=True)
+    backlog_tasks = Task.objects.filter(project=project).exclude(id__in=tasks_in_sprints)
+
+    if not backlog_tasks.exists():
+        return Response(
+            {"detail": "No hay tareas en el product backlog para generar sprints"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # Contar sprints anteriores
+    sprint_count = Sprint.objects.filter(project=project).count()
+
+    # Llamar al generador de múltiples sprints
+    logger.info(f"Generando múltiples sprints con IA para proyecto {project.id}")
+    ai_result = generate_multi_sprint(project, members, backlog_tasks, sprint_count)
+
+    if ai_result is None or "sprints" not in ai_result:
+        return Response(
+            {"detail": "Error al generar los sprints con IA."},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    # ── Crear los sprints en la BD ────────────────────────────────
+    created_sprints = []
+    total_tasks_assigned = 0
+
+    for idx, sprint_data in enumerate(ai_result.get("sprints", [])):
+        # Calcular fechas secuenciales para cada sprint
+        start_date, end_date = calculate_sprint_dates_sequence(
+            sprint_index=idx,
+            duration_weeks=sprint_data.get("duration_weeks", 2),
+        )
+
+        # Crear el sprint con descripción
+        sprint = Sprint.objects.create(
+            project=project,
+            name=sprint_data.get("sprint_name", f"Sprint {sprint_count + idx + 1}"),
+            goal=sprint_data.get("goal", ""),
+            description=sprint_data.get("description", ""),
+            start_date=start_date,
+            end_date=end_date,
+            status="Planificando",
+        )
+
+        # Asignar tareas al sprint
+        sprint_task_count = 0
+        for task_data in sprint_data.get("assigned_tasks", []):
+            task_id = task_data.get("task_id")
+            assigned_to_user_id = task_data.get("assigned_to_user_id")
+            order = task_data.get("order", 0)
+
+            try:
+                task = Task.objects.get(id=task_id, project=project)
+                # Verificar que la tarea no esté ya en otro sprint
+                if not SprintTask.objects.filter(task=task).exists():
+                    SprintTask.objects.create(sprint=sprint, task=task, order=order)
+                    if assigned_to_user_id:
+                        task.assignee = assigned_to_user_id
+                        task.save()
+                    sprint_task_count += 1
+            except Task.DoesNotExist:
+                logger.warning(f"Tarea {task_id} no encontrada en proyecto {project.id}")
+                continue
+
+        total_tasks_assigned += sprint_task_count
+        serializer = SprintSerializer(sprint)
+        created_sprints.append(serializer.data)
+
+    source = ai_result.get("_source", "unknown")
+
+    return Response({
+        "sprints": created_sprints,
+        "sprints_count": len(created_sprints),
+        "total_tasks_assigned": total_tasks_assigned,
+        "ai_reasoning": ai_result.get("reasoning", ""),
+        "remaining_backlog": ai_result.get("remaining_backlog_ids", []),
+        "message": (
+            f"Se generaron {len(created_sprints)} sprints "
+            f"con {total_tasks_assigned} tareas asignadas en total. "
+            f"Fuente: {source}."
+        ),
+    }, status=status.HTTP_201_CREATED)

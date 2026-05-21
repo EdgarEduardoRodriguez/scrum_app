@@ -10,6 +10,8 @@ import {
   Play,
   GripVertical,
   X,
+  Sparkles,
+  Loader2,
 } from "lucide-react";
 import { useProject } from "../context/ProjectContext";
 import { apiFetch } from "../utils/api";
@@ -75,9 +77,60 @@ export default function SprintPage() {
   const [loadingSprints, setLoadingSprints] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  const [generatingAi, setGeneratingAi] = useState(false);
+  const [aiStatus, setAiStatus] = useState(null); // { type: 'success' | 'error', message: '' }
+
   const [form, setForm] = useState({
     name: "", goal: "", startDate: "", endDate: "",
   });
+  
+  // ── Generate sprint with AI ────────────────────────────────────
+  const handleGenerateWithAI = async () => {
+    if (!activeProject) return;
+    setGeneratingAi(true);
+    setAiStatus(null);
+    try {
+      const res = await apiFetch(
+        `/api/auth/projects/${activeProject.id}/ai/generate-sprint/`,
+        { method: "POST" }
+      );
+      const data = await res.json();
+      if (res.ok) {
+        // Refresh sprints to include all new ones
+        await fetchSprints();
+        const sprintCount = data.sprints_count || data.sprints?.length || 0;
+        setAiStatus({
+          type: "success",
+          message: data.message || `Se generaron ${sprintCount} sprints con ${data.total_tasks_assigned || 0} tareas`,
+        });
+        // Auto-select the first new sprint
+        if (data.sprints?.length > 0 && data.sprints[0]?.id) {
+          setSelectedSprintId(data.sprints[0].id);
+        }
+      } else {
+        setAiStatus({
+          type: "error",
+          message: data.detail || "Error al generar los sprints con IA",
+        });
+      }
+    } catch (err) {
+      console.error("Error generating sprint with AI:", err);
+      setAiStatus({
+        type: "error",
+        message: "Error de conexión al generar sprint con IA",
+      });
+    } finally {
+      setGeneratingAi(false);
+    }
+  };
+  
+  // Clear AI status after 8 seconds
+  useEffect(() => {
+    if (aiStatus) {
+      const timer = setTimeout(() => setAiStatus(null), 8000);
+      return () => clearTimeout(timer);
+    }
+  }, [aiStatus]);
 
   // ── Fetch sprints from backend ─────────────────────────────────
   const fetchSprints = useCallback(async () => {
@@ -347,14 +400,55 @@ export default function SprintPage() {
             {activeProject?.name || "Selecciona un proyecto"}
           </p>
         </div>
-        <button
-          onClick={openCreateModal}
-          className="flex items-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg font-semibold text-sm transition-colors shadow-sm"
-        >
-          <Plus className="w-4 h-4" />
-          Nuevo sprint
-        </button>
+        <div className="flex items-center gap-2">
+          {activeProject && (
+            <button
+              onClick={handleGenerateWithAI}
+              disabled={generatingAi}
+              className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-lg font-semibold text-sm transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {generatingAi ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Generando...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4" />
+                  Generar con IA
+                </>
+              )}
+            </button>
+          )}
+          <button
+            onClick={openCreateModal}
+            className="flex items-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg font-semibold text-sm transition-colors shadow-sm"
+          >
+            <Plus className="w-4 h-4" />
+            Nuevo sprint
+          </button>
+        </div>
       </div>
+
+      {/* AI Status Notification */}
+      {aiStatus && (
+        <div
+          className={`mb-4 px-4 py-3 rounded-lg border text-sm font-medium transition-all ${
+            aiStatus.type === "success"
+              ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+              : "bg-red-50 border-red-200 text-red-700"
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            {aiStatus.type === "success" ? (
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+            ) : (
+              <AlertCircle className="w-4 h-4 shrink-0" />
+            )}
+            <span>{aiStatus.message}</span>
+          </div>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">

@@ -197,6 +197,7 @@ class Sprint(models.Model):
     )
     name = models.CharField(max_length=200, verbose_name="Nombre del sprint")
     goal = models.TextField(blank=True, verbose_name="Objetivo del sprint")
+    description = models.TextField(blank=True, verbose_name="Descripción del sprint")
     start_date = models.DateField(null=True, blank=True, verbose_name="Fecha de inicio")
     end_date = models.DateField(null=True, blank=True, verbose_name="Fecha de fin")
     status = models.CharField(

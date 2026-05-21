@@ -33,6 +33,9 @@ urlpatterns = [
     path("projects/<int:project_pk>/sprints/<int:sprint_pk>/", views.sprint_detail, name="sprint_detail"),
     path("projects/<int:project_pk>/sprints/<int:sprint_pk>/tasks/<int:task_pk>/", views.sprint_task_toggle, name="sprint_task_toggle"),
 
+    # AI Sprint Generation
+    path("projects/<int:project_pk>/ai/generate-sprint/", views.ai_generate_sprint, name="ai_generate_sprint"),
+
     # Invitations
     path("invitations/", views.my_invitations, name="my_invitations"),
     path("invitations/<int:invitation_id>/respond/", views.respond_invitation, name="respond_invitation"),
