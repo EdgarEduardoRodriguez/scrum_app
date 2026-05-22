@@ -92,6 +92,26 @@ export function ProjectProvider({ children }) {
     setActiveProject(project);
   };
 
+  const deleteProject = async (projectId) => {
+    try {
+      const res = await apiFetch(`/api/auth/projects/${projectId}/`, {
+        method: "DELETE",
+      });
+      if (!res.ok && res.status !== 204) {
+        const errData = await res.json();
+        throw new Error(errData.detail || "Error al eliminar el proyecto");
+      }
+      setProjects((prev) => prev.filter((p) => p.id !== projectId));
+      if (activeProject?.id === projectId) {
+        setActiveProject(null);
+      }
+      return true;
+    } catch (err) {
+      console.error("Error deleting project:", err);
+      throw err;
+    }
+  };
+
   const clearProject = () => {
     setActiveProject(null);
   };
@@ -103,6 +123,7 @@ export function ProjectProvider({ children }) {
       loading,
       error,
       createProject,
+      deleteProject,
       selectProject,
       clearProject,
     }),

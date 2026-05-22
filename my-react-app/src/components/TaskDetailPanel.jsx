@@ -95,10 +95,10 @@ export default function TaskDetailPanel({ task, onClose, onUpdateTask, onDeleteT
               size="sm"
               variant="ghost"
               onClick={() => onDeleteTask(task.id)}
-              className="h-8 px-2 gap-1 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+              className="h-8 px-2 gap-1 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 font-semibold"
             >
-              <Trash2 className="w-3.5 h-3.5" />
-              Eliminar
+              <Trash2 className="w-4 h-4 text-red-500" />
+              <span className="text-red-600">Eliminar</span>
             </Button>
           )}
           <Button size="sm" variant="ghost" onClick={onClose} className="h-8 w-8 p-0">

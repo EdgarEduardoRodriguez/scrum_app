@@ -8,9 +8,9 @@ import {
   ChevronRight,
   LogOut,
   CheckCircle2,
-  Users,
   LayoutDashboard,
   X,
+  Trash2,
 } from "lucide-react";
 
 // Paleta de colores para nuevos proyectos
@@ -127,15 +127,23 @@ function NewProjectModal({ onClose, onCreate }) {
   );
 }
 
-function ProjectCard({ project, onSelect }) {
+function ProjectCard({ project, onSelect, onDelete, currentUserRole }) {
   const progress = project.tasksTotal > 0
     ? Math.round((project.tasksCompleted / project.tasksTotal) * 100)
     : 0;
+  const isScrumMaster = currentUserRole === "Scrum Master";
+
+  const handleDelete = (e) => {
+    e.stopPropagation();
+    if (confirm(`¿Estás seguro de eliminar el proyecto "${project.name}"?\n\nSe eliminarán todos los sprints, tareas y datos asociados. Esta acción no se puede deshacer.`)) {
+      onDelete(project.id);
+    }
+  };
 
   return (
-    <button
+    <div
       onClick={() => onSelect(project)}
-      className="group w-full text-left bg-white rounded-2xl border-2 border-slate-200 hover:border-blue-400 hover:shadow-lg transition-all duration-200 p-6 relative overflow-hidden"
+      className="group w-full bg-white rounded-2xl border-2 border-slate-200 hover:border-blue-400 hover:shadow-lg transition-all duration-200 p-6 relative overflow-hidden cursor-pointer"
     >
       {/* Barra de color superior */}
       <div
@@ -145,21 +153,32 @@ function ProjectCard({ project, onSelect }) {
 
       <div className="flex items-start justify-between mb-4 mt-1">
         {/* Ícono y nombre */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-1">
           <div
-            className="w-11 h-11 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-sm"
+            className="w-11 h-11 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-sm shrink-0"
             style={{ backgroundColor: project.color }}
           >
             {project.name.charAt(0).toUpperCase()}
           </div>
-          <div>
-            <h3 className="font-semibold text-slate-800 group-hover:text-blue-600 transition-colors leading-tight">
+          <div className="min-w-0">
+            <h3 className="font-semibold text-slate-800 group-hover:text-blue-600 transition-colors leading-tight truncate">
               {project.name}
             </h3>
             <span className="text-xs text-slate-400">{project.role}</span>
           </div>
         </div>
-        <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-400 transition-colors mt-1" />
+        <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+          {isScrumMaster && (
+            <button
+              onClick={handleDelete}
+              className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors"
+              title="Eliminar proyecto"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
+          <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-400 transition-colors" />
+        </div>
       </div>
 
       {/* Descripción */}
@@ -196,12 +215,12 @@ function ProjectCard({ project, onSelect }) {
           />
         </div>
       </div>
-    </button>
+    </div>
   );
 }
 
 export default function ProjectsPage() {
-  const { projects, createProject, selectProject } = useProject();
+  const { projects, createProject, selectProject, deleteProject } = useProject();
   const { logout, user } = useAuth();
   const navigate = useNavigate();
   const [showModal, setShowModal] = useState(false);
@@ -223,10 +242,16 @@ export default function ProjectsPage() {
     navigate("/");
   };
 
-  const handleCreate = (data) => {
-    const newProject = createProject(data);
-    selectProject(newProject);
-    navigate("/");
+  const handleCreate = async (data) => {
+    try {
+      const newProject = await createProject(data);
+      if (newProject) {
+        selectProject(newProject);
+        navigate("/");
+      }
+    } catch (err) {
+      console.error("Error creating project:", err);
+    }
   };
 
   const handleLogout = async () => {
@@ -316,6 +341,8 @@ export default function ProjectsPage() {
                 key={project.id}
                 project={project}
                 onSelect={handleSelect}
+                onDelete={deleteProject}
+                currentUserRole={project.role}
               />
             ))}
 

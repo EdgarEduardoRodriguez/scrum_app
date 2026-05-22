@@ -154,6 +154,13 @@ def project_detail(request, pk):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     elif request.method == "DELETE":
+        # Solo Scrum Master puede eliminar el proyecto
+        current_membership = ProjectMember.objects.filter(project=project, user=request.user).first()
+        if not current_membership or current_membership.role != "Scrum Master":
+            return Response(
+                {"detail": "Solo el Scrum Master puede eliminar el proyecto"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         project.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
